@@ -1,0 +1,957 @@
+---
+title: "Evolution_pram_Hdf_secheresse"
+output: html_document
+date: "2023-05-11"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval=TRUE, warning=FALSE, message=FALSE)
+```
+
+# Etat des lieux de l'évolution en Hauts-de-France des paramètres température, hydrométrie, qualité chimique, poissons et macro-invertébrés 
+
+Etat des lieux global de l'évolution des paramètres environnementaux et de biodiversité sur l'ensemble des stations de la région, après avoir défini les périodes de sécheresses via les stations hydrométriques de références utilisées dans les BSH. 
+
+
+```{r}
+#Importation des packages necessaires
+
+library(tidyverse) 
+library(aspe) # package pour les données poisson 
+library(hubeau) #package pour les données de débits 
+library(ggpubr) # package pour la réalisation de certains graphiques 
+library(openxlsx) #package pour importer/exporter des Excel 
+library(hydroTSM) #package traitement/analyse de séries temporelles liées à l'hydrologie 
+
+```
+
+## Identification des périodes de sécheresse hydrologique dans les Hauts-de-France 
+
+Cette partie a pour but d'identifier les année où des sécheresses hydrologiques ont eu lieu dans la région. Elle se base sur l'étude des débits de 6 stations hydrométriques utilisées comme référence dans les BSH (Bulletins de Situation Hydrologique). 
+
+Pour le bassin Artois-Picardie, ces stations sont : 
+
+-La Liane à Wirwigne (E530 0210)
+-L'Helpe Mineure à Etroeungt (D013 7010)
+-La Lys à Delettes (E351 1220)
+-La Canche à Brimeux (E540 3010)
+-La Somme à Abbeville (E6470910) 
+
+Pour le bassin Seine-Normandie, la station est :
+
+-L'Oise à Sempigny (H740 1010)
+
+Définition de la sécheresse hydrologique : lorsque les débits passent en dessous d'un seuil, qui pourra être compris entre le Q90 et le Q70 de la courbe des débits classés (plusieurs seuils pourront être testés pour identifier le plus pertinent). 
+
+### Chargement des chroniques de débits pour les 6 stations utilisées 
+
+La période sélectionnée pour calculer le seuil de sécheresse est de 30 ans de 1992 à 2022. 
+
+Les valeurs de débits sont en l/s. Il y a quelques trous dans la donnée journalière, mais très peu.  
+
+Importation des données de débits pour les 6 stations (il n'est pas necessaire d'executer ce code si le fichier RData contenant les data.frame de débits est disponible. Voir ci-après pour le chargement de ce RData) :
+
+```{r, eval=FALSE}
+# La Liane à Wirwigne 
+
+q_E530 <- get_hydrometrie_obs_elab(
+  list(code_entite = "E5300210",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#L'Helpe Mineure à Etroeungt
+
+q_D013 <- get_hydrometrie_obs_elab(
+  list(code_entite = "D0137010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Lys à Delettes 
+
+q_E351 <- get_hydrometrie_obs_elab(
+  list(code_entite = "E3511220",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Canche à Brimeux
+
+q_E540 <- get_hydrometrie_obs_elab(
+  list(code_entite = "E5400310",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Somme à Abbeville 
+
+q_E647 <- get_hydrometrie_obs_elab(
+  list(code_entite = "E6470910",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+# L'Oise à Sempigny 
+
+q_H740 <- get_hydrometrie_obs_elab(
+  list(code_entite = "H7401010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+```
+
+
+```{r, eval=FALSE}
+# Téléchargement en RData des données de débits 
+
+save(q_E530,q_D013,q_E351, q_E540,q_E647,q_H740, file="raw_data/q_journaliers_ref.RData")
+```
+
+Importation du fichier RData de débits si disponible : 
+
+```{r}
+load(file="raw_data/q_journaliers_ref.RData")
+```
+
+
+### Réalisation des courbes de débits classés 
+
+```{r}
+
+# La Liane à Wirwigne 
+
+fdc_E530<-fdc(q_E530$resultat_obs_elab, lQ.thr=0.95,hQ.thr=NA, 
+              main="La Liane à Wirwigne",xlab="Fréquence au dépassement", ylab="Débit (l/s)")
+
+#L'Helpe mineure à Etroeungt 
+
+fdc_D013<-fdc(q_D013$resultat_obs_elab, lQ.thr=0.95,hQ.thr=NA, 
+              main="L'Helpe mineure à Etroeungt",xlab="Fréquence au dépassement", ylab="Débit (l/s)")
+
+# La Lys à Delettes 
+
+fdc_E351<-fdc(q_E351$resultat_obs_elab, lQ.thr=0.95,hQ.thr=NA, 
+              main="La Lys à Delettes",xlab="Fréquence au dépassement", ylab="Débit (l/s)")
+
+# La Canche à Brimeux
+
+fdc_E540<-fdc(q_E540$resultat_obs_elab, lQ.thr=0.95,hQ.thr=NA, 
+              main="La Canche à Brimeux",xlab="Fréquence au dépassement", ylab="Débit (l/s)")
+
+#La Somme à Abbeville 
+
+fdc_E647<-fdc(q_E647$resultat_obs_elab, lQ.thr=0.95,hQ.thr=NA, 
+              main="La Somme à Abbeville",xlab="Fréquence au dépassement", ylab="Débit (l/s)")
+
+# L'Oise à Sempigny 
+
+fdc_H740<-fdc(q_H740$resultat_obs_elab, lQ.thr=0.95,hQ.thr=NA, 
+              main="L'Oise à Sempigny ",xlab="Fréquence au dépassement", ylab="Débit (l/s)")
+
+
+```
+
+Récapitulatif des seuils de sécheresse (en l/s) avec le Q90 comme seuil : 
+
+-La Liane : 381 l/s 
+-L'Helpe : 250 l/s 
+-La Lys : 924 l/s 
+-La Canche : 8232 l/s 
+-La Somme : 22053 l/s 
+-L'Oise : 9602 l/s 
+
+Récapitulatif des seuils de sécheresse (en l/s) avec le Q95 comme seuil : 
+
+-La Liane : 328 l/s 
+-L'Helpe : 213 l/s 
+-La Lys :  846 l/s 
+-La Canche : 7844 l/s 
+-La Somme : 19644 l/s 
+-L'Oise : 8120 l/s 
+
+### Identification des années de sécheresse pour un seuil à Q90 
+
+Les lignes de code renvoient les années de sécheresse, avec la durée en jours de cette sécheresse. 
+
+```{r}
+
+# La Liane 
+
+sech_90_E530<-q_E530 %>% 
+  filter(resultat_obs_elab<381) 
+sech_90_E530$annee<-as.factor(sech_90_E530$annee)
+
+table(sech_90_E530$annee) 
+
+```
+```{r}
+# L'Helpe 
+
+sech_90_D013<-q_D013 %>% 
+  filter(resultat_obs_elab<250) 
+sech_90_D013$annee<-as.factor(sech_90_D013$annee)
+
+table(sech_90_D013$annee)
+```
+
+
+On peut constater rien que sur ces deux stations que le seuil de sécheresse n'est pas adapté : beaucoup trop d'années sortent comme étant année de sécheresse, avec des durées parfois très courtes. 
+
+### Identification des années de sécheresse pour un seuil à Q95
+
+```{r}
+# La Liane 
+
+sech_95_E530<-q_E530 %>% 
+  filter(resultat_obs_elab<328) 
+sech_95_E530$annee<-as.factor(sech_95_E530$annee)
+
+table(sech_95_E530$annee)
+```
+```{r}
+# L'Helpe 
+
+sech_95_D013<-q_D013 %>% 
+  filter(resultat_obs_elab<213) 
+sech_95_D013$annee<-as.factor(sech_95_D013$annee)
+
+table(sech_95_D013$annee)
+```
+```{r}
+# La Lys 
+
+sech_95_E351<-q_E351 %>% 
+  filter(resultat_obs_elab<846) 
+sech_95_E351$annee<-as.factor(sech_95_E351$annee)
+
+table(sech_95_E351$annee)
+
+```
+
+## Evolution des paramètres "poisson"
+### Chargement des données d'IPR, ses métriques et des mesures individuelles pour les Hdf
+
+Les données piscioles pour la région Hdf ont déjà été extraites des bases de données dans un autre projet R et seront réutilisées. Les IPR et leurs métriques seront mis sous forme de graphiques uniquement pour mettre en évidence la difficulté de les agréger à une échelle départementale.
+
+```{r}
+# Chargement du tableau de données IPR et des tables du package aspe
+
+load(file="raw_data/IPR.RData")
+load(file="raw_data/tables_sauf_mei_2023_05_10_10_16_44.RData")
+load(file="raw_data/mesures_indiv.RData")
+
+```
+
+Remarque : Dans la data frame, la station de la sainte-marie est notée en RRP alors que c'est une RCS pour l'année 2018. 
+
+
+```{r}
+
+ipr_niv1<-ipr %>% 
+  drop_na() # suppression des NA 
+
+ipr_niv1$annee<-as.factor(ipr_niv1$annee) #conversion de la variable année de numérique à facteur 
+ipr_niv1$sta_id<-as.factor(ipr_niv1$sta_id)
+  
+```
+
+### L'Aisne 
+
+#### Evolution de l'IPR et de ses métriques 
+
+Graphiques en boxplots de l'IPR et des ses métriques pour l'ensemble des stations de pêche du département en fonction des années: une boxplot représente une année, chaque point représente une station, identifiée par son numéro sta_id des tables aspe.
+
+```{r, echo=FALSE}
+# Boxplot de la distibution des IPR par année sur le département 
+
+box_ipr_niv1_02<-ipr_niv1 %>% 
+  filter(dept=='02') %>% 
+  ggplot(aes(x=annee, y=ipr))+geom_boxplot()+
+  geom_point(aes(x=annee, y=ipr, color=sta_id))+ggtitle("IPR")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_ipr_niv1_02 #affichage 
+
+#Boxplots de la distribution des métriques de l'IPR par année sur le département 
+
+box_ner_niv1_02<-ipr_niv1 %>% 
+  filter(dept=='02') %>% 
+  ggplot(aes(x=annee, y=ner))+
+  geom_boxplot()+geom_point(aes(x=annee, y=ner, color=sta_id))+
+  ggtitle("NER")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_ner_niv1_02 #affichage 
+
+box_nel_niv1_02<-ipr_niv1 %>% 
+  filter(dept=='02') %>% 
+  ggplot(aes(x=annee, y=nel))+
+  geom_boxplot()+geom_point(aes(x=annee, y=nel, color=sta_id))+
+  ggtitle("NEL")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_nel_niv1_02 #affichage 
+
+box_nte_niv1_02<-ipr_niv1 %>% 
+  filter(dept=='02') %>% 
+  ggplot(aes(x=annee, y=nte))+geom_boxplot()+
+  geom_point(aes(x=annee, y=nte, color=sta_id))+
+  ggtitle("NTE")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_nte_niv1_02 #affichage 
+
+box_dit_niv1_02<-ipr_niv1 %>% 
+  filter(dept=='02') %>% 
+  ggplot(aes(x=annee, y=dit))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dit, color=sta_id))+
+  ggtitle("DIT") +
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dit_niv1_02 #affichage 
+
+box_dio_niv1_02<-ipr_niv1 %>% 
+  filter(dept=='02') %>% 
+  ggplot(aes(x=annee, y=dio))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dio, color=sta_id))+
+  ggtitle("DIO")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dio_niv1_02 #affichage 
+
+box_dii_niv1_02<-ipr_niv1 %>% 
+  filter(dept=='02') %>% 
+  ggplot(aes(x=annee, y=dii))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dii, color=sta_id))+
+  ggtitle("DII")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dii_niv1_02 #affichage 
+
+box_dti_niv1_02<-ipr_niv1 %>% 
+  filter(dept=='02') %>% 
+  ggplot(aes(x=annee, y=dti))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dti, color=sta_id))+
+  ggtitle("DTI")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dti_niv1_02 #affichage
+
+# Regroupement des graphiques de l'IPR et ses métriques 
+
+poiss_box_niv1_02<-ggarrange(box_ipr_niv1_02,box_ner_niv1_02, box_nel_niv1_02, box_nte_niv1_02, box_dit_niv1_02,box_dio_niv1_02, box_dii_niv1_02, box_dti_niv1_02, common.legend = TRUE) # affichage pas lisible sur le RMarkdown 
+
+```
+
+Pour les points de stations, il est possible de remplacer geom_point par geom_jitter, pour éviter le chevauchement de plusieurs points et pouvoir tous les voir (le graphique est en contrepartie un peu plus chargé). 
+
+#### Le Nord 
+
+Même graphiques que ci-dessus. 
+
+```{r, echo=FALSE}
+box_ipr_niv1_59<-ipr_niv1 %>% 
+  filter(dept=='59') %>% 
+  ggplot(aes(x=annee, y=ipr))+geom_boxplot()+
+  geom_point(aes(x=annee, y=ipr, color=sta_id))+ggtitle("IPR")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_ipr_niv1_59 #affichage 
+
+#Boxplots de la distribution des métriques de l'IPR par année sur le département 
+
+box_ner_niv1_59<-ipr_niv1 %>% 
+  filter(dept=='59') %>% 
+  ggplot(aes(x=annee, y=ner))+
+  geom_boxplot()+geom_point(aes(x=annee, y=ner, color=sta_id))+
+  ggtitle("NER")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_ner_niv1_59 #affichage 
+
+box_nel_niv1_59<-ipr_niv1 %>% 
+  filter(dept=='59') %>% 
+  ggplot(aes(x=annee, y=nel))+
+  geom_boxplot()+geom_point(aes(x=annee, y=nel, color=sta_id))+
+  ggtitle("NEL")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_nel_niv1_59 #affichage 
+
+box_nte_niv1_59<-ipr_niv1 %>% 
+  filter(dept=='59') %>% 
+  ggplot(aes(x=annee, y=nte))+geom_boxplot()+
+  geom_point(aes(x=annee, y=nte, color=sta_id))+
+  ggtitle("NTE")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_nte_niv1_59 #affichage 
+
+box_dit_niv1_59<-ipr_niv1 %>% 
+  filter(dept=='59') %>% 
+  ggplot(aes(x=annee, y=dit))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dit, color=sta_id))+
+  ggtitle("DIT") +
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dit_niv1_59 #affichage 
+
+box_dio_niv1_59<-ipr_niv1 %>% 
+  filter(dept=='59') %>% 
+  ggplot(aes(x=annee, y=dio))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dio, color=sta_id))+
+  ggtitle("DIO")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dio_niv1_59 #affichage 
+
+box_dii_niv1_59<-ipr_niv1 %>% 
+  filter(dept=='59') %>% 
+  ggplot(aes(x=annee, y=dii))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dii, color=sta_id))+
+  ggtitle("DII")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dii_niv1_59 #affichage 
+
+box_dti_niv1_59<-ipr_niv1 %>% 
+  filter(dept=='59') %>% 
+  ggplot(aes(x=annee, y=dti))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dti, color=sta_id))+
+  ggtitle("DTI")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dti_niv1_59 #affichage
+
+# Regroupement des graphiques de l'IPR et ses métriques 
+
+poiss_box_niv1_59<-ggarrange(box_ipr_niv1_59,box_ner_niv1_59, box_nel_niv1_59, box_nte_niv1_59, box_dit_niv1_59,box_dio_niv1_59, box_dii_niv1_59, box_dti_niv1_59, common.legend = TRUE)
+```
+
+#### L'Oise 
+
+```{r, echo=FALSE}
+box_ipr_niv1_60<-ipr_niv1 %>% 
+  filter(dept=='60') %>% 
+  ggplot(aes(x=annee, y=ipr))+geom_boxplot()+
+  geom_point(aes(x=annee, y=ipr, color=sta_id))+ggtitle("IPR")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_ipr_niv1_60 #affichage 
+
+#Boxplots de la distribution des métriques de l'IPR par année sur le département 
+
+box_ner_niv1_60<-ipr_niv1 %>% 
+  filter(dept=='60') %>% 
+  ggplot(aes(x=annee, y=ner))+
+  geom_boxplot()+geom_point(aes(x=annee, y=ner, color=sta_id))+
+  ggtitle("NER")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_ner_niv1_60 #affichage 
+
+box_nel_niv1_60<-ipr_niv1 %>% 
+  filter(dept=='60') %>% 
+  ggplot(aes(x=annee, y=nel))+
+  geom_boxplot()+geom_point(aes(x=annee, y=nel, color=sta_id))+
+  ggtitle("NEL")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_nel_niv1_60 #affichage 
+
+box_nte_niv1_60<-ipr_niv1 %>% 
+  filter(dept=='60') %>% 
+  ggplot(aes(x=annee, y=nte))+geom_boxplot()+
+  geom_point(aes(x=annee, y=nte, color=sta_id))+
+  ggtitle("NTE")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_nte_niv1_60 #affichage 
+
+box_dit_niv1_60<-ipr_niv1 %>% 
+  filter(dept=='60') %>% 
+  ggplot(aes(x=annee, y=dit))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dit, color=sta_id))+
+  ggtitle("DIT") +
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dit_niv1_60 #affichage 
+
+box_dio_niv1_60<-ipr_niv1 %>% 
+  filter(dept=='60') %>% 
+  ggplot(aes(x=annee, y=dio))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dio, color=sta_id))+
+  ggtitle("DIO")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dio_niv1_60 #affichage 
+
+box_dii_niv1_60<-ipr_niv1 %>% 
+  filter(dept=='60') %>% 
+  ggplot(aes(x=annee, y=dii))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dii, color=sta_id))+
+  ggtitle("DII")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dii_niv1_60 #affichage 
+
+box_dti_niv1_60<-ipr_niv1 %>% 
+  filter(dept=='60') %>% 
+  ggplot(aes(x=annee, y=dti))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dti, color=sta_id))+
+  ggtitle("DTI")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dti_niv1_60 #affichage
+
+# Regroupement des graphiques de l'IPR et ses métriques 
+
+poiss_box_niv1_60<-ggarrange(box_ipr_niv1_60,box_ner_niv1_60, box_nel_niv1_60, box_nte_niv1_60, box_dit_niv1_60,box_dio_niv1_60, box_dii_niv1_60, box_dti_niv1_60, common.legend = TRUE)
+```
+
+#### Le Pas-de-Calais 
+
+```{r, echo=FALSE}
+
+box_ipr_niv1_62<-ipr_niv1 %>% 
+  filter(dept=='62') %>% 
+  ggplot(aes(x=annee, y=ipr))+geom_boxplot()+
+  geom_point(aes(x=annee, y=ipr, color=sta_id))+ggtitle("IPR")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_ipr_niv1_62 #affichage 
+
+#Boxplots de la distribution des métriques de l'IPR par année sur le département 
+
+box_ner_niv1_62<-ipr_niv1 %>% 
+  filter(dept=='62') %>% 
+  ggplot(aes(x=annee, y=ner))+
+  geom_boxplot()+geom_point(aes(x=annee, y=ner, color=sta_id))+
+  ggtitle("NER")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_ner_niv1_62 #affichage 
+
+box_nel_niv1_62<-ipr_niv1 %>% 
+  filter(dept=='62') %>% 
+  ggplot(aes(x=annee, y=nel))+
+  geom_boxplot()+geom_point(aes(x=annee, y=nel, color=sta_id))+
+  ggtitle("NEL")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_nel_niv1_62 #affichage 
+
+box_nte_niv1_62<-ipr_niv1 %>% 
+  filter(dept=='62') %>% 
+  ggplot(aes(x=annee, y=nte))+geom_boxplot()+
+  geom_point(aes(x=annee, y=nte, color=sta_id))+
+  ggtitle("NTE")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_nte_niv1_62 #affichage 
+
+box_dit_niv1_62<-ipr_niv1 %>% 
+  filter(dept=='62') %>% 
+  ggplot(aes(x=annee, y=dit))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dit, color=sta_id))+
+  ggtitle("DIT") +
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dit_niv1_62 #affichage 
+
+box_dio_niv1_62<-ipr_niv1 %>% 
+  filter(dept=='62') %>% 
+  ggplot(aes(x=annee, y=dio))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dio, color=sta_id))+
+  ggtitle("DIO")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dio_niv1_62 #affichage 
+
+box_dii_niv1_62<-ipr_niv1 %>% 
+  filter(dept=='62') %>% 
+  ggplot(aes(x=annee, y=dii))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dii, color=sta_id))+
+  ggtitle("DII")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dii_niv1_62 #affichage 
+
+box_dti_niv1_62<-ipr_niv1 %>% 
+  filter(dept=='62') %>% 
+  ggplot(aes(x=annee, y=dti))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dti, color=sta_id))+
+  ggtitle("DTI")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dti_niv1_62 #affichage
+
+# Regroupement des graphiques de l'IPR et ses métriques 
+
+poiss_box_niv1_62<-ggarrange(box_ipr_niv1_62,box_ner_niv1_62, box_nel_niv1_62, box_nte_niv1_62, box_dit_niv1_62,box_dio_niv1_62, box_dii_niv1_62, box_dti_niv1_62, common.legend = TRUE)
+```
+
+#### La Somme 
+
+```{r, echo=FALSE}
+box_ipr_niv1_80<-ipr_niv1 %>% 
+  filter(dept=='80') %>% 
+  ggplot(aes(x=annee, y=ipr))+geom_boxplot()+
+  geom_point(aes(x=annee, y=ipr, color=sta_id))+ggtitle("IPR")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_ipr_niv1_80 #affichage 
+
+#Boxplots de la distribution des métriques de l'IPR par année sur le département 
+
+box_ner_niv1_80<-ipr_niv1 %>% 
+  filter(dept=='80') %>% 
+  ggplot(aes(x=annee, y=ner))+
+  geom_boxplot()+geom_point(aes(x=annee, y=ner, color=sta_id))+
+  ggtitle("NER")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_ner_niv1_80 #affichage 
+
+box_nel_niv1_80<-ipr_niv1 %>% 
+  filter(dept=='80') %>% 
+  ggplot(aes(x=annee, y=nel))+
+  geom_boxplot()+geom_point(aes(x=annee, y=nel, color=sta_id))+
+  ggtitle("NEL")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_nel_niv1_80 #affichage 
+
+box_nte_niv1_80<-ipr_niv1 %>% 
+  filter(dept=='80') %>% 
+  ggplot(aes(x=annee, y=nte))+geom_boxplot()+
+  geom_point(aes(x=annee, y=nte, color=sta_id))+
+  ggtitle("NTE")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_nte_niv1_80 #affichage 
+
+box_dit_niv1_80<-ipr_niv1 %>% 
+  filter(dept=='80') %>% 
+  ggplot(aes(x=annee, y=dit))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dit, color=sta_id))+
+  ggtitle("DIT") +
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dit_niv1_80 #affichage 
+
+box_dio_niv1_80<-ipr_niv1 %>% 
+  filter(dept=='80') %>% 
+  ggplot(aes(x=annee, y=dio))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dio, color=sta_id))+
+  ggtitle("DIO")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dio_niv1_80 #affichage 
+
+box_dii_niv1_80<-ipr_niv1 %>% 
+  filter(dept=='80') %>% 
+  ggplot(aes(x=annee, y=dii))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dii, color=sta_id))+
+  ggtitle("DII")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dii_niv1_80 #affichage 
+
+box_dti_niv1_80<-ipr_niv1 %>% 
+  filter(dept=='80') %>% 
+  ggplot(aes(x=annee, y=dti))+geom_boxplot()+
+  geom_point(aes(x=annee, y=dti, color=sta_id))+
+  ggtitle("DTI")+
+  theme(axis.text.x = element_text(angle = 90)) 
+
+box_dti_niv1_80 #affichage
+
+# Regroupement des graphiques de l'IPR et ses métriques 
+
+poiss_box_niv1_80<-ggarrange(box_ipr_niv1_80,box_ner_niv1_80, box_nel_niv1_80, box_nte_niv1_80, box_dit_niv1_80,box_dio_niv1_80, box_dii_niv1_80, box_dti_niv1_80, common.legend = TRUE)
+```
+
+## Niveau d'analyse 2
+
+### Données relatives aux populations piscicoles 
+
+#### Sélection des données sur l'IPR pour les 17 stations selectionnées 
+
+##### Correspondance des codes sandre et des sta_id
+
+Sélection dans la table "station" du package aspe des sta_id, code sandre et libellés des 17 stations selectionnées. 
+
+```{r}
+
+station_selec <-station %>% 
+  filter(sta_code_sandre %in% c('03112710','03162000',
+                                '03128935','01001336',
+                                '01028000','01089000',
+                                '03138390','03134730',
+                                '03133937','03133000',
+                                '01000729','01101000',
+                                '01053000','01133000',
+                                '01137000','01002230',
+                                '01120000')) %>% 
+  select(sta_id:sta_libelle_sandre) %>% 
+  unique()
+
+```
+
+##### Selection de ces stations dans le tableau d'IPR 
+
+Grâce aux codes sta_id ci-dessus, il est possible de filtrer le tableau d'IPR pour ne garder que les données des stations qui nous intéressent pour l'état des lieux (el). 
+
+```{r}
+
+ipr_el <-ipr %>% 
+  filter(sta_id %in% c('6134','5401','5483','19','267','4959',
+                       '5442','122','208','250','5534','5307',
+                       '44','85','149','188','273')) %>% # sélection des stations choisies
+  drop_na()  # on ne garde pas les lignes qui contiennent des NA 
+  
+```
+
+Remarque : les stations 4959 et 5307 font partie du reseau RRP 
+
+Les noms des stations de pêche dans le data frame ne correspondent pas aux noms des stations sandre (et il y a en plus différentes écritures pour une même station). Le data.frame ipr_el est exporté en fichier excel pour pouvoir être plus facilement modifié. Il sera ré-importé après modification de tous les noms de station. 
+
+```{r, eval=FALSE}
+# Export du data frame en Excel 
+
+write.xlsx(ipr_el, file="raw_data/ipr_el_non_corrige.xlsx")
+
+```
+
+```{r}
+#Import du fichier excel corrigé
+
+ipr_el<-read.xlsx("raw_data/ipr_el_corrige.xlsx") %>% 
+  select(dept,sta_id,obj_libelle,ipr,cli_libelle,annee:dti) #selection des colonnes les plus interessantes 
+
+
+```
+
+
+#### Visualisation globale des IPR et de leurs métriques 
+
+##### Distribution statistique des variables 
+
+
+On vérifie si la distribution des IPR et de ses métriques est normale (pour savoir s'il est possible de faire des moyennes, écarts-types, des ANOVA etc.). Pour cela, il est possible d'utiliser un test de Shapiro. 
+
+```{r}
+shapiro.test(ipr_el$ipr) # Marche pas quand j'utilise %>% je sais pas pk, voir comment rendre ça plus efficace
+
+shapiro.test(ipr_el$ner) 
+
+shapiro.test(ipr_el$nel)
+
+shapiro.test(ipr_el$nte)
+
+shapiro.test(ipr_el$dit)
+
+shapiro.test(ipr_el$dio)
+
+shapiro.test(ipr_el$dii)
+
+shapiro.test(ipr_el$dti) 
+
+```
+
+Les données d'IPR et de ses métriques ne sont pas normalement distribuées. 
+
+```{r}
+
+# Visualisation de la distribution de l'IPR/ses métriques, avec comparaison avec une distribution normale 
+
+ipr_el %>% 
+  ggdensity(x = "ipr", fill = "lightgray", title = "IPR density") +
+  stat_overlay_normal_density(color = "red", linetype = "dashed")
+
+ipr_el %>% 
+  ggdensity(x = "ner", fill = "lightgray", title = "NER density") +
+  stat_overlay_normal_density(color = "red", linetype = "dashed")
+
+ipr_el %>% 
+  ggdensity(x = "nel", fill = "lightgray", title = "NEL density") +
+  stat_overlay_normal_density(color = "red", linetype = "dashed")
+
+ipr_el %>% 
+  ggdensity(x = "nte", fill = "lightgray", title = "NTE density") +
+  stat_overlay_normal_density(color = "red", linetype = "dashed")
+
+ipr_el %>% 
+  ggdensity(x = "dit", fill = "lightgray", title = "DIT density") +
+  stat_overlay_normal_density(color = "red", linetype = "dashed")
+
+ipr_el %>% 
+  ggdensity(x = "dio", fill = "lightgray", title = "DIO density") +
+  stat_overlay_normal_density(color = "red", linetype = "dashed")
+
+ipr_el %>% 
+  ggdensity(x = "dii", fill = "lightgray", title = "DII density") +
+  stat_overlay_normal_density(color = "red", linetype = "dashed")
+
+ipr_el %>% 
+  ggdensity(x = "dti", fill = "lightgray", title =  "DTI density") +
+  stat_overlay_normal_density(color = "red", linetype = "dashed")
+
+```
+
+Remarque : Erreur "Error in gzfile(file, "wb")  : cannot open the connection" quand ligne exécutée depuis le RMarkdown (pas quand executée dans la console). Les graphiques s'affichent, mais l'erreur aussi. 
+
+
+Essai de transformation de IPR/métriques en données normales par application du log10 : 
+
+```{r}
+
+shapiro.test(log(ipr_el$ipr))
+
+shapiro.test(log(ipr_el$ner))
+
+shapiro.test(log(ipr_el$nel))
+
+shapiro.test(log(ipr_el$nte))
+
+shapiro.test(log(ipr_el$dit))
+
+shapiro.test(log(ipr_el$dio))
+
+shapiro.test(log(ipr_el$dii))
+
+shapiro.test(log(ipr_el$dti))
+
+
+```
+
+La variable log(ipr) est normalement distribuée, mais l'application du log n'a pas permi de normaliser les métriques de l'ipr. Des essais d'autres opérations ont été effectués dans la console (1/x, sqrt, log10(max(x+1) - x)), mais aucune n'a permi de normaliser les métriques de l'IPR. 
+
+
+##### Evolution globale par station et par département de l'IPR et de ses métriques 
+
+###### L'Aisne 
+
+```{r}
+
+#Evolution de l'IPR 
+
+evol_ipr_02<-ipr_el %>% 
+  filter(dept=='02') %>% 
+  ggplot(aes(x=annee, y=ipr, color=pop_libelle))+geom_line(linetype='dashed')+geom_point()+ggtitle("IPR") 
+
+# Evolution des métriques 
+
+evol_ner_02<-ipr_el %>% 
+  filter(dept=='02') %>% 
+  ggplot(aes(x=annee, y=ner, color=pop_libelle))+geom_point()+geom_line(linetype='dashed')+ggtitle("Métrique NER")
+
+evol_nel_02<-ipr_el %>% 
+  filter(dept=='02') %>% 
+  ggplot(aes(x=annee, y=nel, color=pop_libelle))+geom_point()+geom_line(linetype='dashed')+ggtitle("Métrique NEL")
+
+evol_nte_02<-ipr_el %>% 
+  filter(dept=='02') %>% 
+  ggplot(aes(x=annee, y=nte, color=pop_libelle))+geom_point()+geom_line(linetype='dashed')+ggtitle("Métrique NTE")
+
+evol_dit_02<-ipr_el %>% 
+  filter(dept=='02') %>% 
+  ggplot(aes(x=annee, y=dit, color=pop_libelle))+geom_point()+geom_line(linetype='dashed')+ggtitle("Métrique DIT")
+
+evol_dio_02<-ipr_el %>% 
+  filter(dept=='02') %>% 
+  ggplot(aes(x=annee, y=dio, color=pop_libelle))+geom_point()+geom_line(linetype='dashed')+ggtitle("Métrique DIO")
+
+evol_dii_02<-ipr_el %>% 
+  filter(dept=='02') %>% 
+  ggplot(aes(x=annee, y=dii, color=pop_libelle))+geom_point()+geom_line(linetype='dashed')+ggtitle("Métrique DII")
+
+evol_dti_02<-ipr_el %>% 
+  filter(dept=='02') %>% 
+  ggplot(aes(x=annee, y=dti, color=pop_libelle))+geom_point()+geom_line(linetype='dashed')+ggtitle("Métrique DTI")
+
+ggarrange(evol_ipr_02,evol_ner_02, evol_nel_02, evol_nte_02, evol_dit_02, evol_dio_02, evol_dii_02, evol_dti_02, common.legend = TRUE)
+
+```
+
+
+
+```{r}
+# Evolution des métriques pour le département par année 
+
+ipr_el %>% 
+  filter(dept=='02') %>% 
+  ggplot(aes(x=annee, y=ner, color=pop_libelle))+geom_point()+geom_line(linetype='dashed')+ggtitle("Evolution de la métrique NER en fonction des années pour les stations de l'Aisne")
+
+```
+
+###### Le Nord 
+
+```{r}
+
+#Evolution de l'IPR 
+
+ipr_el %>% 
+  filter(dept=='59') %>% 
+  ggplot(aes(x=annee, y=ipr, color=pop_libelle))+geom_line(linetype='dashed')+geom_point()+ggtitle("Evolution de l'IPR en fonction des années pour les stations du Nord") 
+
+```
+
+###### L'Oise 
+
+```{r}
+
+#Evolution de l'IPR 
+
+ipr_el %>% 
+  filter(dept=='60') %>% 
+  ggplot(aes(x=annee, y=ipr, color=pop_libelle))+geom_line(linetype='dashed')+geom_point()+ggtitle("Evolution de l'IPR en fonction des années pour les stations de l'Oise") 
+
+```
+
+###### Le Pas-de-Calais 
+
+```{r}
+
+#Evolution de l'IPR 
+
+ipr_el %>% 
+  filter(dept=='62') %>% 
+  ggplot(aes(x=annee, y=ipr, color=pop_libelle))+geom_line(linetype='dashed')+geom_point()+ggtitle("Evolution de l'IPR en fonction des années pour les stations du Pas-de-Calais") 
+
+```
+
+###### La Somme 
+
+```{r}
+#Evolution de l'IPR 
+
+ipr_el %>% 
+  filter(dept=='80') %>% 
+  ggplot(aes(x=annee, y=ipr, color=pop_libelle))+geom_line(linetype='dashed')+geom_point()+ggtitle("Evolution de l'IPR en fonction des années pour les stations de la Somme") 
+```
+
+
+2022 2017 2019 (2012 assecs tardifs) 
+
