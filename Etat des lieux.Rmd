@@ -27,9 +27,9 @@ library(hydroTSM) #package traitement/analyse de séries temporelles liées à l
 
 ## Identification des périodes de sécheresse hydrologique dans les Hauts-de-France 
 
-Cette partie a pour but d'identifier les année où des sécheresses hydrologiques ont eu lieu dans la région. Elle se base sur l'étude des débits de 6 stations hydrométriques utilisées comme référence dans les BSH (Bulletins de Situation Hydrologique). 
+Cette partie a pour but d'identifier les année où des sécheresses hydrologiques ont eu lieu dans la région. Elle se base sur l'étude des débits de 6 stations hydrométriques utilisées comme référence dans les BSH (Bulletins de Situation Hydrologique).Ces stations sont complétées par d'autres stations de leurs bassins versants, celles étant étudiées chaque année dans les BSH. 
 
-Pour le bassin Artois-Picardie, ces stations sont : 
+Pour le bassin Artois-Picardie, ces 6 stations de référence sont : 
 
 -La Liane à Wirwigne (E530 0210)
 -L'Helpe Mineure à Etroeungt (D013 7010)
@@ -41,9 +41,9 @@ Pour le bassin Seine-Normandie, la station est :
 
 -L'Oise à Sempigny (H740 1010)
 
-Définition de la sécheresse hydrologique : lorsque les débits passent en dessous d'un seuil, qui pourra être compris entre le Q90 et le Q70 de la courbe des débits classés (plusieurs seuils pourront être testés pour identifier le plus pertinent). 
+Définition de la sécheresse hydrologique : lorsque les débits passent en dessous d'un seuil, qui pourra être compris par exemple entre le Q90 et le Q70 de la courbe de la fréquence au dépassement des débits (plusieurs seuils pourront être testés pour identifier le plus pertinent). 
 
-### Chargement des chroniques de débits pour les 6 stations utilisées 
+### Chargement des chroniques de débits  
 
 La période sélectionnée pour calculer le seuil de sécheresse est de 30 ans de 1992 à 2022. 
 
@@ -133,8 +133,45 @@ Importation du fichier RData de débits si disponible :
 load(file="raw_data/q_journaliers_ref.RData")
 ```
 
+```{r}
+# Importation des données de débits pour les stations complémentaires 
+
+# BV des fleuves côtiers 
+
+q_E510 <- get_hydrometrie_obs_elab(     # La Slack à Rinxent 
+  list(code_entite = "E5105710",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+q_E520 <- get_hydrometrie_obs_elab(     # Le Wimereux à Wimille 
+  list(code_entite = "E5205710",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+# BV de l'Avesnois 
+
+q_E520 <- get_hydrometrie_obs_elab(     # Le Wimereux à Wimille 
+  list(code_entite = "E5205710",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+```
 
 ### Réalisation des courbes de débits classés 
+
+#### Pour les 6 stations de référence 
 
 ```{r}
 
@@ -189,63 +226,136 @@ Récapitulatif des seuils de sécheresse (en l/s) avec le Q95 comme seuil :
 -La Somme : 19644 l/s 
 -L'Oise : 8120 l/s 
 
-### Identification des années de sécheresse pour un seuil à Q90 
-
-Les lignes de code renvoient les années de sécheresse, avec la durée en jours de cette sécheresse. 
+#### Pour les stations complémentaires 
 
 ```{r}
+# BV des fleuves côtiers 
 
+fdc_E510<-fdc(q_E510$resultat_obs_elab, lQ.thr=0.95,hQ.thr=NA, 
+              main="La Slack à Rinxent ",xlab="Fréquence au dépassement", ylab="Débit (l/s)") #Q95 =56 l/s 
+
+fdc_E520<-fdc(q_E520$resultat_obs_elab, lQ.thr=0.95,hQ.thr=NA, 
+              main="Le Wimereux à Wimille",xlab="Fréquence au dépassement", ylab="Débit (l/s)") # #Q95 =64 l/s
+```
+
+Attention : les données de débits pour la Slack ne sont pas complètes, il n'ya pas de données entre 1993 et 1994 et entre 1995 et 1998, et il y a quelques trous (de quelques jours) entre 2000 et 2023. 
+
+### Identification des années de sécheresse pour un seuil à Q90 
+
+Les data frame sech_90_x contiennent le nombre de jours de sécheresse par an pour une station donnée.  
+
+```{r}
+#BV des fleuves côtiers 
 # La Liane 
 
 sech_90_E530<-q_E530 %>% 
-  filter(resultat_obs_elab<381) 
-sech_90_E530$annee<-as.factor(sech_90_E530$annee)
+  group_by(annee) %>% 
+  summarise(duree_sech_E530=sum(resultat_obs_elab<381)) 
 
-table(sech_90_E530$annee) 
 
 ```
+
+
 ```{r}
+#BV de l'Avenois 
 # L'Helpe 
 
 sech_90_D013<-q_D013 %>% 
-  filter(resultat_obs_elab<250) 
-sech_90_D013$annee<-as.factor(sech_90_D013$annee)
+ group_by(annee) %>% 
+  summarise(duree_sech_D013=sum(resultat_obs_elab<250)) 
 
-table(sech_90_D013$annee)
+
 ```
 
 
-On peut constater rien que sur ces deux stations que le seuil de sécheresse n'est pas adapté : beaucoup trop d'années sortent comme étant année de sécheresse, avec des durées parfois très courtes. 
+```{r}
+# 
+```
 
 ### Identification des années de sécheresse pour un seuil à Q95
 
 ```{r}
+
+# BV des fleuves côtiers 
 # La Liane 
 
 sech_95_E530<-q_E530 %>% 
-  filter(resultat_obs_elab<328) 
-sech_95_E530$annee<-as.factor(sech_95_E530$annee)
+  group_by(annee) %>% 
+  summarise(duree_sech_E530=sum(resultat_obs_elab<328)) 
 
-table(sech_95_E530$annee)
+# La Slack 
+
+sech_95_E510<-q_E510 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech_E510=sum(resultat_obs_elab<56))
+
+# Le Wimereux 
+
+sech_95_E520<-q_E520 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech_E520=sum(resultat_obs_elab<64))
+
+
 ```
+
+
+
 ```{r}
+#BV de l'Avenois
 # L'Helpe 
 
 sech_95_D013<-q_D013 %>% 
-  filter(resultat_obs_elab<213) 
-sech_95_D013$annee<-as.factor(sech_95_D013$annee)
-
-table(sech_95_D013$annee)
+  group_by(annee) %>% 
+  summarise(duree_sech_D013=sum(resultat_obs_elab<213))
 ```
+
+
 ```{r}
 # La Lys 
 
 sech_95_E351<-q_E351 %>% 
-  filter(resultat_obs_elab<846) 
-sech_95_E351$annee<-as.factor(sech_95_E351$annee)
+  group_by(annee) %>% 
+  summarise(duree_sech_E351=sum(resultat_obs_elab<846))
 
-table(sech_95_E351$annee)
+```
 
+```{r}
+#La Canche 
+
+sech_95_E540<-q_E540 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech_E540=sum(resultat_obs_elab<7844))
+
+
+```
+
+```{r}
+#La SOmme 
+
+sech_95_E647<-q_E647 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech_E647=sum(resultat_obs_elab<19644))
+```
+
+```{r}
+#L'Oise 
+
+sech_95_H740<-q_H740 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech_H740=sum(resultat_obs_elab<8120))
+```
+
+
+Agrégation dans un même data frame de toutes les durées de sécheresse : 
+
+```{r}
+duree_sech<-data.frame(annee=sech_95_D013$annee, D013=sech_95_D013$duree_sech_D013,     
+                       E351=sech_95_E351$duree_sech_E351, 
+                       E520=sech_95_E520$duree_sech_E520,
+                       E530=sech_95_E530$duree_sech_E530,
+                       E540=sech_95_E540$duree_sech_E540,
+                       E647=sech_95_E647$duree_sech_E647,
+                       H740=sech_95_H740$duree_sech_H740)
 ```
 
 ## Evolution des paramètres "poisson"
