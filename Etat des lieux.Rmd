@@ -22,40 +22,262 @@ library(hubeau) #package pour les données de débits
 library(ggpubr) # package pour la réalisation de certains graphiques 
 library(openxlsx) #package pour importer/exporter des Excel 
 library(hydroTSM) #package traitement/analyse de séries temporelles liées à l'hydrologie 
+library(Rmisc) # pour le traitement de données, notamment les barres d'erreurs sur les graphiques 
+library(runner)
 
 ```
 
 ## Identification des périodes de sécheresse hydrologique dans les Hauts-de-France 
 
-Cette partie a pour but d'identifier les année où des sécheresses hydrologiques ont eu lieu dans la région. Elle se base sur l'étude des débits de 6 stations hydrométriques utilisées comme référence dans les BSH (Bulletins de Situation Hydrologique).Ces stations sont complétées par d'autres stations de leurs bassins versants, celles étant étudiées chaque année dans les BSH. 
+Cette partie a pour but d'identifier les année où des sécheresses hydrologiques ont eu lieu dans la région. Elle se base sur l'étude des débits de 33 stations hydrométriques utilisées dans les BSH (Bulletins de Situation Hydrologique). Ces stations sont : 
 
-Pour le bassin Artois-Picardie, ces 6 stations de référence sont : 
+Bassin Artois-Picardie : 
 
--La Liane à Wirwigne (E530 0210)
--L'Helpe Mineure à Etroeungt (D013 7010)
--La Lys à Delettes (E351 1220)
--La Canche à Brimeux (E540 3010)
--La Somme à Abbeville (E6470910) 
+E5505720	AUTHIE	Dompierre/Authie
+E5406510	TERNOISE	Hesdin
+E5400310	CANCHE	Brimeux
+E5300210	LIANE	Wirwignes
+E5205710	WIMEREUX	Wimille
+E4905710	YSER	Bambecque
+E4306010	HEM	Guémy
+E4035710	AA	Wizernes
+E3646210	CLARENCE	Robecq
+E3518510	LAQUETTE	Witternesse
+E3511220	LYS	Delettes
+E3346020	MARQUE	Ennevelin
+E2367410	COURANT COUTICHES	Flines Lez Raches
+E1827020	HOGNEAU	Thivencelle
+E1766010	RHONELLE	Aulnoy
+E1727510	ECAILLON	Thiant
+D0206010	SOLRE	Ferrière la Grande
+D0137010	HELPE MINEURE	Etroeungt
+E6498315	Maye	Arry
+E6470910	Somme canalisée	Abbeville US
+E6426010	Selle	Plachy-Buyon
+E6406010	Avre	Moreuil
 
-Pour le bassin Seine-Normandie, la station est :
 
--L'Oise à Sempigny (H740 1010)
+Bassin Seine-Normandie : 
+
+H7053110	Ancienne Sambre	Le Nouvion en Thiérache
+H7021010	Oise	Hirson
+H7142010	Serre	Mortiers
+H7302020	Ailette	Chavignon
+H5522010	Ourcq	Chouy
+H7401010	Oise	Sempigny
+H7423711	Aronde	Clairoix US
+H7513010	Automne	Saintines
+H7602010	Brêche	Nogent-sur-Oise
+H7742010	Thérain	Beauvais
+H7813210	Launette	Ver-sur-Launette
+
+Les stations utilisées dans les BSH non utilisées ici le sont car il manque trop de données de débits. 
+
+
 
 Définition de la sécheresse hydrologique : lorsque les débits passent en dessous d'un seuil, qui pourra être compris par exemple entre le Q90 et le Q70 de la courbe de la fréquence au dépassement des débits (plusieurs seuils pourront être testés pour identifier le plus pertinent). 
 
 ### Chargement des chroniques de débits  
 
-La période sélectionnée pour calculer le seuil de sécheresse est de 30 ans de 1992 à 2022. 
+La période sélectionnée pour calculer le seuil de sécheresse est de 31 ans de 1992 à 2022 pour toutes les stations sauf celles de la Laurette et de la Maye, pour lesquelles la période est 1994-2022 (pas de données en 1992-1993). 
 
 Les valeurs de débits sont en l/s. Il y a quelques trous dans la donnée journalière, mais très peu.  
 
-Importation des données de débits pour les 6 stations (il n'est pas necessaire d'executer ce code si le fichier RData contenant les data.frame de débits est disponible. Voir ci-après pour le chargement de ce RData) :
+Importation des données de débits pour les 37 stations (il n'est pas necessaire d'executer ce code si le fichier RData contenant les data.frame de débits est disponible. Voir ci-après pour le chargement de ce RData) :
 
-```{r, eval=FALSE}
+```{r, echo=FALSE, eval=FALSE}
+
+# L'Authie à Dompierre 
+
+q_E550 <- get_hydrometrie_obs_elab(
+  list(code_entite = "E5505720",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Ternoise à Hesdine 
+
+q_E5406 <- get_hydrometrie_obs_elab(
+  list(code_entite = "E5406510",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Canche à Brimeux
+
+q_E54003 <- get_hydrometrie_obs_elab(
+  list(code_entite = "E5400310",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
 # La Liane à Wirwigne 
 
 q_E530 <- get_hydrometrie_obs_elab(
   list(code_entite = "E5300210",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+# Le Wimereux à Wimille 
+
+q_E520 <- get_hydrometrie_obs_elab(     
+  list(code_entite = "E5205710",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#L'Yser à Bambecque 
+
+q_E490 <- get_hydrometrie_obs_elab( 
+  list(code_entite = "E4905710",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Hem à Guémy 
+
+q_E430 <- get_hydrometrie_obs_elab(     
+  list(code_entite = "E4306010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#L'Aa à Wizernes 
+
+q_E403 <- get_hydrometrie_obs_elab(     
+  list(code_entite = "E4035710",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La CLarence à Robecq 
+
+q_E364 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "E3646210",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Laquette à Witternesse 
+
+q_E35185 <- get_hydrometrie_obs_elab(     
+  list(code_entite = "E3518510",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Lys à Delettes 
+
+q_E35112 <- get_hydrometrie_obs_elab(
+  list(code_entite = "E3511220",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+# La Marque à Ennevelin 
+
+q_E334 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "E3346020",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2021-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))  # problème -> changement de station pour la Marque? pas de données 2022
+
+q_E334_bis <- get_hydrometrie_obs_elab(      
+  list(code_entite = "E3346022",
+       date_debut_obs_elab = "2022-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+q_E334<-rbind(q_E334, q_E334_bis) # mise à la suite des deux data frame de débits pour faire une chronique complète 1992-2022
+
+#Le Courant Coutiches à Flines lez Raches 
+
+q_E236 <- get_hydrometrie_obs_elab(     
+  list(code_entite = "E2367410",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#L'Hogneau à Thivencelle
+
+q_E182 <- get_hydrometrie_obs_elab(     
+  list(code_entite = "E1827020",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Rhonelle à Aulnoy 
+
+q_E176 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "E1766010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+# L'Ecaillon à Thiant 
+
+q_E172 <- get_hydrometrie_obs_elab(     
+  list(code_entite = "E1727510",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Solre à Ferrière la Grande 
+
+q_D020 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "D0206010",
        date_debut_obs_elab = "1992-01-01",
        date_fin_obs_elab="2022-12-31",
        grandeur_hydro_elab = "QmJ")) %>% 
@@ -74,32 +296,142 @@ q_D013 <- get_hydrometrie_obs_elab(
   mutate(annee = lubridate::ymd(date_obs_elab),
          annee = lubridate::year(annee))
 
-#La Lys à Delettes 
+# La Maye à Arry 
 
-q_E351 <- get_hydrometrie_obs_elab(
-  list(code_entite = "E3511220",
-       date_debut_obs_elab = "1992-01-01",
+q_E649 <- get_hydrometrie_obs_elab(     
+  list(code_entite = "E6498315",
+       date_debut_obs_elab = "1994-01-01",
        date_fin_obs_elab="2022-12-31",
        grandeur_hydro_elab = "QmJ")) %>% 
   select(code_station:resultat_obs_elab) %>% 
   mutate(annee = lubridate::ymd(date_obs_elab),
-         annee = lubridate::year(annee))
-
-#La Canche à Brimeux
-
-q_E540 <- get_hydrometrie_obs_elab(
-  list(code_entite = "E5400310",
-       date_debut_obs_elab = "1992-01-01",
-       date_fin_obs_elab="2022-12-31",
-       grandeur_hydro_elab = "QmJ")) %>% 
-  select(code_station:resultat_obs_elab) %>% 
-  mutate(annee = lubridate::ymd(date_obs_elab),
-         annee = lubridate::year(annee))
+         annee = lubridate::year(annee)) # pas de données avant mi-1993
 
 #La Somme à Abbeville 
 
 q_E647 <- get_hydrometrie_obs_elab(
   list(code_entite = "E6470910",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+# La Selle à Plachy-Buyon 
+
+q_E642 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "E6426010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#Le Avre à Moreuil 
+
+q_E64060 <- get_hydrometrie_obs_elab(     
+  list(code_entite = "E6406010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+# La Somme à Lamotte-Brebière
+
+q_E64009 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "E6400910",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+# L'Ancre à Bonnay 
+
+q_E638<- get_hydrometrie_obs_elab(      
+  list(code_entite = "E6386070",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+# La Somme à Ham 
+
+q_E635 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "E6351420",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+# Ancienne Smabre, Le Nouvion en Thiérache 
+
+q_H705<- get_hydrometrie_obs_elab(      
+  list(code_entite = "H7053110",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#L'Oise à Hirson 
+
+q_H702 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "H7021010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Serre à Mortiers 
+
+q_H714 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "H7142010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#L'Ailette à Chavignon 
+
+q_H730 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "H7302020",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+# L'Aisne à Soissons 
+
+q_H650 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "H6501020",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#L'Ourcq à Chouy 
+
+q_H552 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "H5522010",
        date_debut_obs_elab = "1992-01-01",
        date_fin_obs_elab="2022-12-31",
        grandeur_hydro_elab = "QmJ")) %>% 
@@ -118,13 +450,86 @@ q_H740 <- get_hydrometrie_obs_elab(
   mutate(annee = lubridate::ymd(date_obs_elab),
          annee = lubridate::year(annee))
 
+#L'Automne à Saintines  
+
+q_H751 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "H7513010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Breche à Nogent sur Oise 
+
+q_H760 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "H7602010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#Le Therain à Beauvais 
+
+q_H774<- get_hydrometrie_obs_elab(      
+  list(code_entite = "H7742010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee)) 
+
+# La Launette à Vers-sur-Launette 
+
+q_H781 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "H7813210",
+       date_debut_obs_elab = "1994-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee)) # pas de données avant mi-1993
+
+#L'Aronde à Clairoix  
+
+q_H742 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "H7423710",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmJ")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+```
+
+Les stations de l'Aisne à Soisson, de la sommes à Lamotte-Brebière, de la Somme à Ham, de l'Ancre à Bonnay  n'ont pas assez de données sur la période 1992-2022 et ne seront donc pas utilisées.
+
+Remarque : pour la station de l'Aronde (H742), il semblerait que l'API donne des valeurs pas complétement corrigées, car il y a des valeurs abhérentes (débit négatif ou nul brutalement sur 9 jours en plein hiver), dont une valeur nulle abhérente corrigée sur la banque Hydro. Les lignes abhérentes seront supprimées en filtrant les valeurs inférieures à 1 l/s (les valeurs abhrérentes sont les seules valeurs inférieurs à 1 sur toute la chronique). 
+
+Pour E334, pas de données pour 2022, autre code station E3346022 qui donne les données manquantes. 
+
+```{r, eval=FALSE}
+# Suppression des lignes abhérentes remarquées pour la station H742 : 
+
+q_H742<-q_H742 %>% 
+  filter(resultat_obs_elab>1)
+  
 ```
 
 
 ```{r, eval=FALSE}
 # Téléchargement en RData des données de débits 
 
-save(q_E530,q_D013,q_E351, q_E540,q_E647,q_H740, file="raw_data/q_journaliers_ref.RData")
+save(q_D013, q_D020, q_E172, q_E176, q_E182, q_E236, q_E334, q_E35112,q_E35185, 
+     q_E364, q_E403, q_E430, q_E490, q_E520, q_E530, q_E54003, q_E5406, q_E550,
+     q_E64060, q_E642, q_E647, q_E649, q_H552,
+     q_H702, q_H705, q_H714, q_H730, q_H740, q_H742, q_H751, q_H760, q_H774, 
+     q_H781, file="raw_data/q_journaliers_ref.RData")
 ```
 
 Importation du fichier RData de débits si disponible : 
@@ -133,229 +538,1501 @@ Importation du fichier RData de débits si disponible :
 load(file="raw_data/q_journaliers_ref.RData")
 ```
 
-```{r}
-# Importation des données de débits pour les stations complémentaires 
+### Réalisation des courbes de fréquence au dépassement  
 
-# BV des fleuves côtiers 
-
-q_E510 <- get_hydrometrie_obs_elab(     # La Slack à Rinxent 
-  list(code_entite = "E5105710",
-       date_debut_obs_elab = "1992-01-01",
-       date_fin_obs_elab="2022-12-31",
-       grandeur_hydro_elab = "QmJ")) %>% 
-  select(code_station:resultat_obs_elab) %>% 
-  mutate(annee = lubridate::ymd(date_obs_elab),
-         annee = lubridate::year(annee))
-
-q_E520 <- get_hydrometrie_obs_elab(     # Le Wimereux à Wimille 
-  list(code_entite = "E5205710",
-       date_debut_obs_elab = "1992-01-01",
-       date_fin_obs_elab="2022-12-31",
-       grandeur_hydro_elab = "QmJ")) %>% 
-  select(code_station:resultat_obs_elab) %>% 
-  mutate(annee = lubridate::ymd(date_obs_elab),
-         annee = lubridate::year(annee))
-
-# BV de l'Avesnois 
-
-q_E520 <- get_hydrometrie_obs_elab(     # Le Wimereux à Wimille 
-  list(code_entite = "E5205710",
-       date_debut_obs_elab = "1992-01-01",
-       date_fin_obs_elab="2022-12-31",
-       grandeur_hydro_elab = "QmJ")) %>% 
-  select(code_station:resultat_obs_elab) %>% 
-  mutate(annee = lubridate::ymd(date_obs_elab),
-         annee = lubridate::year(annee))
-
-```
-
-### Réalisation des courbes de débits classés 
-
-#### Pour les 6 stations de référence 
-
-```{r}
-
-# La Liane à Wirwigne 
-
-fdc_E530<-fdc(q_E530$resultat_obs_elab, lQ.thr=0.95,hQ.thr=NA, 
-              main="La Liane à Wirwigne",xlab="Fréquence au dépassement", ylab="Débit (l/s)")
-
-#L'Helpe mineure à Etroeungt 
-
-fdc_D013<-fdc(q_D013$resultat_obs_elab, lQ.thr=0.95,hQ.thr=NA, 
-              main="L'Helpe mineure à Etroeungt",xlab="Fréquence au dépassement", ylab="Débit (l/s)")
-
-# La Lys à Delettes 
-
-fdc_E351<-fdc(q_E351$resultat_obs_elab, lQ.thr=0.95,hQ.thr=NA, 
-              main="La Lys à Delettes",xlab="Fréquence au dépassement", ylab="Débit (l/s)")
-
-# La Canche à Brimeux
-
-fdc_E540<-fdc(q_E540$resultat_obs_elab, lQ.thr=0.95,hQ.thr=NA, 
-              main="La Canche à Brimeux",xlab="Fréquence au dépassement", ylab="Débit (l/s)")
-
-#La Somme à Abbeville 
-
-fdc_E647<-fdc(q_E647$resultat_obs_elab, lQ.thr=0.95,hQ.thr=NA, 
-              main="La Somme à Abbeville",xlab="Fréquence au dépassement", ylab="Débit (l/s)")
-
-# L'Oise à Sempigny 
-
-fdc_H740<-fdc(q_H740$resultat_obs_elab, lQ.thr=0.95,hQ.thr=NA, 
-              main="L'Oise à Sempigny ",xlab="Fréquence au dépassement", ylab="Débit (l/s)")
-
-
-```
-
-Récapitulatif des seuils de sécheresse (en l/s) avec le Q90 comme seuil : 
-
--La Liane : 381 l/s 
--L'Helpe : 250 l/s 
--La Lys : 924 l/s 
--La Canche : 8232 l/s 
--La Somme : 22053 l/s 
--L'Oise : 9602 l/s 
-
-Récapitulatif des seuils de sécheresse (en l/s) avec le Q95 comme seuil : 
-
--La Liane : 328 l/s 
--L'Helpe : 213 l/s 
--La Lys :  846 l/s 
--La Canche : 7844 l/s 
--La Somme : 19644 l/s 
--L'Oise : 8120 l/s 
-
-#### Pour les stations complémentaires 
-
-```{r}
-# BV des fleuves côtiers 
-
-fdc_E510<-fdc(q_E510$resultat_obs_elab, lQ.thr=0.95,hQ.thr=NA, 
-              main="La Slack à Rinxent ",xlab="Fréquence au dépassement", ylab="Débit (l/s)") #Q95 =56 l/s 
-
-fdc_E520<-fdc(q_E520$resultat_obs_elab, lQ.thr=0.95,hQ.thr=NA, 
-              main="Le Wimereux à Wimille",xlab="Fréquence au dépassement", ylab="Débit (l/s)") # #Q95 =64 l/s
-```
-
-Attention : les données de débits pour la Slack ne sont pas complètes, il n'ya pas de données entre 1993 et 1994 et entre 1995 et 1998, et il y a quelques trous (de quelques jours) entre 2000 et 2023. 
-
-### Identification des années de sécheresse pour un seuil à Q90 
-
-Les data frame sech_90_x contiennent le nombre de jours de sécheresse par an pour une station donnée.  
-
-```{r}
-#BV des fleuves côtiers 
-# La Liane 
-
-sech_90_E530<-q_E530 %>% 
-  group_by(annee) %>% 
-  summarise(duree_sech_E530=sum(resultat_obs_elab<381)) 
-
-
-```
-
-
-```{r}
-#BV de l'Avenois 
-# L'Helpe 
-
-sech_90_D013<-q_D013 %>% 
- group_by(annee) %>% 
-  summarise(duree_sech_D013=sum(resultat_obs_elab<250)) 
-
-
-```
-
+#### Seuil de sécheresse à q90
 
 ```{r}
 # 
 ```
 
-### Identification des années de sécheresse pour un seuil à Q95
+#### Seuil de sécheresse à q95
+
+Les courbes de fréquences au dépassement (exemple ci-dessous pour la station E550) représentent les débits de l'année pour la période 1992-2022 classés par ordre décroissants en fonction de leur fréquence au dépassement : par exemple, le seuil de 0.95 de fréquence au dépassement est choisi comme seuil de sécheresse, ce qui veut dire que le débit seuil de sécheresse est celui qui est dépassé 95% du temps dans l'année. 
 
 ```{r}
 
-# BV des fleuves côtiers 
+fdc(q_E550$resultat_obs_elab, lQ.thr=0.95,hQ.thr=NA, 
+              main="L'Authie à Dompierre",xlab="Fréquence au dépassement", ylab="Débit (l/s)") # Remplacer le nom du data frame de débits (par exemple q_E550) par celui de la station à étudier et le nom de la station dans main= 
+
+
+```
+
+
+### Identification des années de sécheresse pour un seuil à Q90 
+
+
+### Identification des années de sécheresse pour un seuil à Q95
+#### Nombre de jours en dessous du seuil de sécheresse 
+##### Calcule du nombre de jours de sécheresse 
+
+```{r, eval=FALSE }
+
+# L'Authie 
+
+sech_95_E550<-q_E550 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<4551))
+
+# La Ternoise 
+
+sech_95_E5406<-q_E5406 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<2890))
+
+# La Canche 
+
+sech_95_E54003<-q_E54003 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<7844)) 
+
 # La Liane 
 
 sech_95_E530<-q_E530 %>% 
   group_by(annee) %>% 
-  summarise(duree_sech_E530=sum(resultat_obs_elab<328)) 
+  summarise(duree_sech=sum(resultat_obs_elab<328)) 
 
-# La Slack 
-
-sech_95_E510<-q_E510 %>% 
-  group_by(annee) %>% 
-  summarise(duree_sech_E510=sum(resultat_obs_elab<56))
 
 # Le Wimereux 
 
 sech_95_E520<-q_E520 %>% 
   group_by(annee) %>% 
-  summarise(duree_sech_E520=sum(resultat_obs_elab<64))
+  summarise(duree_sech=sum(resultat_obs_elab<64))
+
+#L'Yser 
+
+sech_95_E490<-q_E490 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<62))
+
+#La Hem 
+
+sech_95_E430<-q_E430 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<294))
+
+#L'Aa 
+
+sech_95_E403<-q_E403 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<2130))
+
+#La Clarence 
+
+sech_95_E364<-q_E364 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<284))
+
+#La Laquette 
+
+sech_95_E35185<-q_E35185 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<104))
+
+# La Lys 
+
+sech_95_E35112<-q_E35112 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<846))
+
+# La Marque 
+
+sech_95_E334<-q_E334 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<33))
 
 
-```
+# Le COurant Coutiches 
 
+sech_95_E236<-q_E236 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<17))
 
+# L'Hogneau 
 
-```{r}
-#BV de l'Avenois
-# L'Helpe 
+sech_95_E182<-q_E182 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<317))
+
+# La Rhonelle 
+
+sech_95_E176<-q_E176 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<238))
+
+#L'Ecaillon 
+
+sech_95_E172<-q_E172 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<481))
+
+#La Solre 
+
+sech_95_D020<-q_D020 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<273))
+
+#L'Helpe 
 
 sech_95_D013<-q_D013 %>% 
   group_by(annee) %>% 
-  summarise(duree_sech_D013=sum(resultat_obs_elab<213))
-```
+  summarise(duree_sech=sum(resultat_obs_elab<213))
 
+# La Maye 
 
-```{r}
-# La Lys 
-
-sech_95_E351<-q_E351 %>% 
+sech_95_E649<-q_E649 %>% 
   group_by(annee) %>% 
-  summarise(duree_sech_E351=sum(resultat_obs_elab<846))
+  summarise(duree_sech=sum(resultat_obs_elab<387))
 
-```
+annee<-c('1992', '1993')
+duree_sech<-c(NA, NA)
 
-```{r}
-#La Canche 
+complement_mq<-data.frame(annee, duree_sech)
 
-sech_95_E540<-q_E540 %>% 
-  group_by(annee) %>% 
-  summarise(duree_sech_E540=sum(resultat_obs_elab<7844))
+sech_95_E649<-rbind(complement_mq, sech_95_E649)
 
-
-```
-
-```{r}
-#La SOmme 
+# La somme à Abbeville 
 
 sech_95_E647<-q_E647 %>% 
   group_by(annee) %>% 
-  summarise(duree_sech_E647=sum(resultat_obs_elab<19644))
-```
+  summarise(duree_sech=sum(resultat_obs_elab<19644))
 
-```{r}
-#L'Oise 
+# LA Selle 
 
-sech_95_H740<-q_H740 %>% 
+sech_95_E642<-q_E642 %>% 
   group_by(annee) %>% 
-  summarise(duree_sech_H740=sum(resultat_obs_elab<8120))
+  summarise(duree_sech=sum(resultat_obs_elab<2728))
+
+# L'Avre 
+
+sech_95_E64060<-q_E64060 %>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<913))
+
+# L'Ancienne Sambre 
+
+sech_95_H705<-q_H705%>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<40))
+
+#L'Oise à Hirson
+
+sech_95_H702<-q_H702%>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<231))
+
+# La Serre 
+
+sech_95_H714<-q_H714%>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<2200))
+
+#L'Ailette 
+
+sech_95_H730<-q_H730%>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<77))
+
+#L'Ourcq 
+
+sech_95_H552<-q_H552%>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<761))
+
+# L'Oise à Sempigny 
+
+sech_95_H740<-q_H740%>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<8120))
+
+#L'Aronde 
+
+sech_95_H742<-q_H742%>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<371))
+
+# L'Automne 
+
+sech_95_H751<-q_H751%>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<1099))
+
+#La Brêche 
+
+sech_95_H760<-q_H760%>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<1217))
+
+# Le Thérain 
+
+sech_95_H774<-q_H774%>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<2968))
+
+#La Laurette 
+
+sech_95_H781<-q_H781%>% 
+  group_by(annee) %>% 
+  summarise(duree_sech=sum(resultat_obs_elab<33))
+
+complement_mq<-data.frame(annee, duree_sech) # création d'un data frame qui rassemble les deux vecteurs ci-dessus
+
+sech_95_H781<-rbind(complement_mq, sech_95_H781) # Assemblage du data.frame de NA pour 1992 et 1993 et du data frame de durée de sécheresse entre 1994 et 2022 (il faut que le data.frame final ait 31 lignes pour pouvoir être assemblé avec les autres data frame de durée se sécheresse)
+
+
 ```
 
 
-Agrégation dans un même data frame de toutes les durées de sécheresse : 
+```{r, eval=FALSE}
+# Assemblage des durées de sécheresse en un seul data frame (version tableau de contingence)
+
+duree_sech_cont<-data.frame(annee=sech_95_D013$annee, D013=sech_95_D013$duree_sech,
+                       D020=sech_95_D020$duree_sech,
+                       E172=sech_95_E172$duree_sech,
+                       E176=sech_95_E176$duree_sech,
+                       E182=sech_95_E182$duree_sech,
+                       E236=sech_95_E236$duree_sech,
+                       E334=sech_95_E334$duree_sech,
+                       E35112=sech_95_E35112$duree_sech,
+                       E35185=sech_95_E35185$duree_sech,
+                       E364=sech_95_E364$duree_sech,
+                       E403=sech_95_E403$duree_sech,
+                       E430=sech_95_E430$duree_sech,
+                       E490=sech_95_E490$duree_sech,
+                       E520=sech_95_E520$duree_sech,
+                       E530=sech_95_E530$duree_sech,
+                       E54003=sech_95_E54003$duree_sech,
+                       E5406=sech_95_E5406$duree_sech,
+                       E550=sech_95_E550$duree_sech,
+                       E64060=sech_95_E64060$duree_sech,
+                       E642=sech_95_E642$duree_sech,
+                       E647=sech_95_E647$duree_sech,
+                       E649=sech_95_E649$duree_sech,
+                       H552=sech_95_H552$duree_sech,
+                       H702=sech_95_H702$duree_sech,
+                       H705=sech_95_H705$duree_sech,
+                       H714=sech_95_H714$duree_sech,
+                       H730=sech_95_H730$duree_sech,
+                       H740=sech_95_H740$duree_sech,
+                       H742=sech_95_H742$duree_sech,
+                       H751=sech_95_H751$duree_sech,
+                       H760=sech_95_H760$duree_sech,
+                       H774=sech_95_H774$duree_sech,
+                       H781=sech_95_H781$duree_sech)
+
+#assemblage en data frame 
+
+duree_sech<-rbind(sech_95_D013,
+                       sech_95_D020,
+                       sech_95_E172,
+                       sech_95_E176,
+                       sech_95_E182,
+                       sech_95_E236,
+                       sech_95_E334,
+                       sech_95_E35112,
+                       sech_95_E35185,
+                       sech_95_E364,
+                       sech_95_E403,
+                       sech_95_E430,
+                       sech_95_E490,
+                       sech_95_E520,
+                       sech_95_E530,
+                       sech_95_E54003,
+                       sech_95_E5406,
+                       sech_95_E550,
+                       sech_95_E64060,
+                       sech_95_E642,
+                       sech_95_E647,
+                       sech_95_E649,
+                       sech_95_H552,
+                       sech_95_H702,
+                       sech_95_H705,
+                       sech_95_H714,
+                       sech_95_H730,
+                       sech_95_H740,
+                       sech_95_H742,
+                       sech_95_H751,
+                       sech_95_H760,
+                       sech_95_H774,
+                       sech_95_H781)
+
+
+```
+
+Téléchargement en RData du data frame de durée de sécheresse : 
+
+```{r, eval=FALSE}
+save(duree_sech_cont, file="raw_data/duree_sech_cont.RData")
+save(duree_sech, file="raw_data/duree_sech.RData")
+
+```
 
 ```{r}
-duree_sech<-data.frame(annee=sech_95_D013$annee, D013=sech_95_D013$duree_sech_D013,     
-                       E351=sech_95_E351$duree_sech_E351, 
-                       E520=sech_95_E520$duree_sech_E520,
-                       E530=sech_95_E530$duree_sech_E530,
-                       E540=sech_95_E540$duree_sech_E540,
-                       E647=sech_95_E647$duree_sech_E647,
-                       H740=sech_95_H740$duree_sech_H740)
+load(file="raw_data/duree_sech.RData")
+load(file="raw_data/duree_sech_cont.RData")
+```
+
+##### Représentation visuelle de la durée de la sécheresse en jours 
+
+La durée de la sécheresse est définie comme le nombre de jours par an en dessous du seuil de sécheresse (définit comme étant le q95 de la courbe de fréquence au dépassement). 
+
+```{r}
+# Boxplots durée de la sécheresse en jours en fonction des années 
+
+duree_sech %>% 
+   ggplot(aes(x=annee, y=duree_sech))+
+  geom_boxplot(outlier.shape=NA)+
+  theme(axis.text.x = element_text(angle = 90))
+
+```
+IL est possible de constater 4 grandes périodes sur lesquelles ont observe des tendances de sécheresses dans les Hauts-de-France :
+-dans les années 1996-1997
+-dans les années 2003 à 2006 
+-en 2011 
+-entre 2017 et 2022 (2021 expecté)
+
+Ces périodes correspodent relativement bien au ressenti de l'établissement sur les périodes de sécheresse (réseau ONDE, observations de terrain lors des pêches electriques par exemple etc.), en particulier l'année 2022 qui ressort globalement comme ayant été soumise à une longue sécheresse hydrologique sur le graphique ci-dessus. Toutefois, on peut noter une grande variabilité de la durée des sécheresses selon les stations, avec des distributions très étendues.
+
+
+
+```{r}
+#nombre de stations en situation de sécheresse par an 
+
+duree_sech_sum<-duree_sech%>% 
+  group_by(annee) %>% # groupement par année
+  summarise(nb_stations_sech=sum(duree_sech>0)) # calcule par année du nombre de station pour lequel la durée de sécheresse est non nulle 
+
+```
+
+```{r}
+# histogramme du nombre de station en situation de sécheresse 
+
+duree_sech_sum %>% 
+  filter(annee %in% c(1994:2022)) %>% 
+  ggplot(aes(x=annee, y=nb_stations_sech))+geom_col()+
+  theme(axis.text.x = element_text(angle = 90))
+  
+```
+On constate qu'il y a toujours des stations en situation de sécheresse quelque soit l'année, ce qui mets en évidence la grande variabilité de situation selon les stations. Toutefois, pour les années identifiées comme étant des années de sécheresse à l'échelle des Hauts-de-France (cf. boxplot ci-dessus), le nombre de stations en situation de sécheresse est élevé : pour l'année 2022 en particulier, 30 stations sur les 33 ont présenté une période de sécheresse, ce qui correspond au maximum sur la période 1994-2022. 
+
+#### Hydraulicité mensuelle 
+
+Calcule de l'hydraulicité mensuelle sur la période 1992-2022. L'hydraulicité est ici le rapport du débits moyen mensuel d'une année donnée sur le débits moyen mensuel inter annuel. Il donne une idée de l'écart à la normale. 
+
+##### Chargement des débits moyens mensuels 
+
+Les débits moyens mensuels utilisés sont ceux disponibles sur l'Hydro Portail (via l'API Hub'eau).  
+
+```{r, echo=FALSE,eval=FALSE}
+# L'Authie à Dompierre 
+
+qm_E550 <- get_hydrometrie_obs_elab(
+  list(code_entite = "E5505720",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Ternoise à Hesdine 
+
+qm_E5406 <- get_hydrometrie_obs_elab(
+  list(code_entite = "E5406510",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Canche à Brimeux
+
+qm_E54003 <- get_hydrometrie_obs_elab(
+  list(code_entite = "E5400310",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+# La Liane à Wirwigne 
+
+qm_E530 <- get_hydrometrie_obs_elab(
+  list(code_entite = "E5300210",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+# Le Wimereux à Wimille 
+
+qm_E520 <- get_hydrometrie_obs_elab(     
+  list(code_entite = "E5205710",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#L'Yser à Bambecque 
+
+qm_E490 <- get_hydrometrie_obs_elab( 
+  list(code_entite = "E4905710",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Hem à Guémy 
+
+qm_E430 <- get_hydrometrie_obs_elab(     
+  list(code_entite = "E4306010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#L'Aa à Wizernes 
+
+qm_E403 <- get_hydrometrie_obs_elab(     
+  list(code_entite = "E4035710",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La CLarence à Robecq 
+
+qm_E364 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "E3646210",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Laquette à Witternesse 
+
+qm_E35185 <- get_hydrometrie_obs_elab(     
+  list(code_entite = "E3518510",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Lys à Delettes 
+
+qm_E35112 <- get_hydrometrie_obs_elab(
+  list(code_entite = "E3511220",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+# La Marque à Ennevelin 
+
+qm_E334 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "E3346020",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2021-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))  # pas toutes les données de La Marque à Ennevelin pour ce code station 
+
+qm_E334_bis <- get_hydrometrie_obs_elab(      # code station avec les données manquantes de La Marque à Ennevelin
+  list(code_entite = "E3346022",
+       date_debut_obs_elab = "2022-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+qm_E334<-rbind(qm_E334, qm_E334_bis) # mise à la suite des deux data frame de débits pour faire une chronique complète 1992-2022
+
+#Le Courant Coutiches à Flines lez Raches 
+
+qm_E236 <- get_hydrometrie_obs_elab(     
+  list(code_entite = "E2367410",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#L'Hogneau à Thivencelle
+
+qm_E182 <- get_hydrometrie_obs_elab(     
+  list(code_entite = "E1827020",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Rhonelle à Aulnoy 
+
+qm_E176 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "E1766010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+# L'Ecaillon à Thiant 
+
+qm_E172 <- get_hydrometrie_obs_elab(     
+  list(code_entite = "E1727510",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Solre à Ferrière la Grande 
+
+qm_D020 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "D0206010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#L'Helpe Mineure à Etroeungt
+
+qm_D013 <- get_hydrometrie_obs_elab(
+  list(code_entite = "D0137010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+# La Maye à Arry 
+
+qm_E649 <- get_hydrometrie_obs_elab(     
+  list(code_entite = "E6498315",
+       date_debut_obs_elab = "1994-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee)) # pas de données avant mi-1993
+
+#La Somme à Abbeville 
+
+qm_E647 <- get_hydrometrie_obs_elab(
+  list(code_entite = "E6470910",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+# La Selle à Plachy-Buyon 
+
+qm_E642 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "E6426010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#Le Avre à Moreuil 
+
+qm_E64060 <- get_hydrometrie_obs_elab(     
+  list(code_entite = "E6406010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+
+# Ancienne Smabre, Le Nouvion en Thiérache 
+
+qm_H705<- get_hydrometrie_obs_elab(      
+  list(code_entite = "H7053110",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#L'Oise à Hirson 
+
+qm_H702 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "H7021010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Serre à Mortiers 
+
+qm_H714 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "H7142010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#L'Ailette à Chavignon 
+
+qm_H730 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "H7302020",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+
+#L'Ourcq à Chouy 
+
+qm_H552 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "H5522010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+# L'Oise à Sempigny 
+
+qm_H740 <- get_hydrometrie_obs_elab(
+  list(code_entite = "H7401010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#L'Automne à Saintines  
+
+qm_H751 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "H7513010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#La Breche à Nogent sur Oise 
+
+qm_H760 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "H7602010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+
+#Le Therain à Beauvais 
+
+qm_H774<- get_hydrometrie_obs_elab(      
+  list(code_entite = "H7742010",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee)) 
+
+# La Launette à Vers-sur-Launette 
+
+qm_H781 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "H7813210",
+       date_debut_obs_elab = "1994-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee)) # pas de données avant mi-1993
+
+#L'Aronde à Clairoix  
+
+qm_H742 <- get_hydrometrie_obs_elab(      
+  list(code_entite = "H7423710",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>% 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee))
+```
+
+Téléchargement en RData des données de débits mensuels : 
+
+```{r, eval=FALSE}
+save(qm_D013, qm_D020, qm_E172, qm_E176, qm_E182, qm_E236, qm_E334, qm_E35112,qm_E35185, 
+     qm_E364, qm_E403, qm_E430, qm_E490, qm_E520, qm_E530, qm_E54003, qm_E5406, qm_E550,
+     qm_E64060, qm_E642, qm_E647, qm_E649, qm_H552,
+     qm_H702, qm_H705, qm_H714, qm_H730, qm_H740, qm_H742, qm_H751, qm_H760, qm_H774, 
+     qm_H781, file="raw_data/q_mensuels_ref.RData")
+```
+
+```{r}
+load(file="raw_data/q_mensuels_ref.RData")
+```
+
+##### Calcul des débits moyens mensuels interannuels 
+
+Chaque data frame qm_ia_x contient pour chaque mois de l'année le débits moyen mensuel inter annuel (Qm_ia) calculé sur la période 1992-2022 (ou 1994-2022 pour les stations sans données en 1992-1993) pour la station x. Ces débits seront considérés comme la référence mensuelle pour le calcul de l'hydraulicité.  
+
+Pour le calcul des débits mensuels de référence (code ci-dessous), remplacer le code station par le code de la station pour laquelle on veur faire le calcul. 
+
+```{r}
+
+qm_ia_D013 <- qm_D013 %>%
+  mutate(month = as.integer(substr(date_obs_elab, 6, 7))) %>% # création d'une colonne contenant uniquement  le mois
+  group_by(month) %>%
+  summarise(Qm_ia = mean(resultat_obs_elab)) # calcul des moyennes des débits mensuels regroupées par mois sur la période 1992-2022
+
+qm_D013 <- qm_D013 %>%
+  mutate(month = as.integer(substr(date_obs_elab, 6, 7))) # création d'une colonne mois
+
+qm_D013 <-
+  merge(qm_ia_D013, qm_D013, by = "month") # jointure des data frame de débits et de débits de référence par la modalité de mois 
+
+ 
+```
+
+(relancer la commande de sauvegarde des qm_x : maintenant, la colonne du débit mensuel inter annuel est comprise dans les data frame dès l'importation)
+
+##### Calcul de l'hydraulicité (H) 
+
+
+```{r, eval=FALSE}
+
+H_D013<-qm_D013 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% # creation d'une colonne H qui divise la colonne de débits mensuel par celle de débits de référence 
+  select(code_station, date_obs_elab, H) # selection des colonnes de code, date et hydraulicité
+
+H_D020<-qm_D020 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E172<-qm_E172%>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E176<-qm_E176 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E182<-qm_E182 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E236<-qm_E236 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E236<-qm_E236 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E334<-qm_E334 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E35112<-qm_E35112 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E35185<-qm_E35185 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E364<-qm_E364 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E403<-qm_E403 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E430<-qm_E430 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E490<-qm_E490 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E520<-qm_E520 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E530<-qm_E530 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E54003<-qm_E54003 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E5406<-qm_E5406 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E550<-qm_E550 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E64060<-qm_E64060 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E642<-qm_E642 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E647<-qm_E647 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_E649<-qm_E649 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_H552<-qm_H552 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_H702<-qm_H702 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_H705<-qm_H705 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_H714<-qm_H714 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_H730<-qm_H730 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_H740<-qm_H740 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_H742<-qm_H742 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_H751<-qm_H751 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_H760<-qm_H760 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_H774<-qm_H774 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+H_H781<-qm_H781 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% 
+  select(code_station, date_obs_elab, H)
+
+
+```
+
+
+
+```{r, eval=FALSE}
+# Création d'un seul data frame contenant les hydraulicités par station et par année 
+
+hydraulicity<-rbind(H_D013, H_D020, H_E172, H_E176, H_E182, H_E236, H_E334, H_E35112,H_E35185, 
+     H_E364, H_E403, H_E430, H_E490, H_E520, H_E530, H_E54003, H_E5406, H_E550,
+     H_E64060, H_E642, H_E647, H_E649, H_H552,
+     H_H702, H_H705, H_H714, H_H730, H_H740, H_H742, H_H751, H_H760, H_H774, 
+     H_H781) 
+
+#création d'une colonne de mois et d'année (de nouveau, parce que j'ai fait la bêtise de les enlever à la création des H_x)
+
+hydraulicity<-hydraulicity %>% 
+  mutate(month = as.integer(substr(date_obs_elab, 6, 7))) %>% 
+  mutate(annee = as.integer(substr(date_obs_elab, 1, 4))) 
+
+hydraulicity$annee<-as.factor(hydraulicity$annee) #conversion colonne annee de entier à facteur
+hydraulicity$month<-as.factor(hydraulicity$month) # conversion colonne month de entier à facteur
+
+
+```
+
+```{r, eval=FALSE}
+# Sauvegarde du data frame d'hydraulicité 
+
+save(hydraulicity, file="processed_data/hydraulicity.RData")
+
+```
+
+```{r}
+# Importation du RData hydraulicity si il n'est pas déjà dans l'environnement 
+
+load(file="processed_data/hydraulicity.RData")
+```
+
+##### Représentation graphique de l'hydraulicité 
+
+
+```{r}
+hydraulicity %>% 
+  group_by(date_obs_elab) %>% 
+summarise(med_H=median(H)) %>% 
+            ggplot(
+  aes(x = date_obs_elab, y = med_H)
+) +
+geom_line()+
+  theme(axis.text.x = element_text(angle = 90))+
+  geom_line(aes(x=date_obs_elab, y=1), col="red")+
+  scale_x_date(date_breaks = "1 year")
+```
+Le graphique ci-dessus représente l'hydraulicité mensuelle médiane sur les 33 stations (31 pour 1992 et 1993) en fonction du temps. La droite y=1 correspond à la situation où le débit moyen mensuel est égal au débit moyen mensuel inter annuel. Lorsque la courbe de l'hydraulicité est au dessus de cette droite, les débits moyens mensuels sont plus élevés que lors d'une année que l'on peut considérer comme "normale". Au contraire, lorsque la courbe passe en dessous de la droite, les débits sont plus faibles que la normale. 
+
+L'évolution de l'hydraulicité sur la période 1992-2022 mets en évidence les mêmes périodes de déficit en eau que la représentation de la durée de sécheresse. 
+
+```{r}
+hydraulicity %>% 
+  filter(annee %in% c("2022", "2020", "2019", "2018","2017", "2011")) %>% 
+   group_by(month, annee) %>% 
+summarise(med_H=median(H)) %>% 
+  ggplot(aes(x=month, y=med_H, fill=annee))+
+  geom_col(position='dodge', stat="identity")+
+  scale_fill_brewer(palette="Set1")
+  
+```
+
+```{r}
+hydraulicity %>% 
+  filter(annee %in% c("2022", "2020", "2019", "2018","2017","2011")) %>% 
+   group_by(month, annee) %>% 
+summarise(med_H=median(H)) %>% 
+  ggplot(aes(x=month, y=med_H, fill=annee))+
+  geom_col(position='stack', stat="identity")+
+  scale_fill_brewer(palette="Set1")
+```
+
+##### Calcul des VCN10
+
+Les VCN10 seront calculés à partir des débits spécifiques de chaque station (débits réels divisées par la surface du bassin versant amont), afin de pouvoir comparer ces VCN10 et les agréger à l'échelle régionale. 
+
+```{r}
+# Calcul des débits spécifiques 
+
+q_E550<-q_E550 %>% 
+  mutate(Q_spe=resultat_obs_elab/796)
+
+q_E5406<-q_E5406 %>% 
+  mutate(Q_spe=resultat_obs_elab/345)
+
+q_E54003<-q_E54003 %>% 
+  mutate(Q_spe=resultat_obs_elab/918)
+
+q_E530<-q_E530 %>% 
+  mutate(Q_spe=resultat_obs_elab/100)
+
+q_E520<-q_E520 %>% 
+  mutate(Q_spe=resultat_obs_elab/74)
+
+q_E490<-q_E490 %>% 
+  mutate(Q_spe=resultat_obs_elab/239)
+
+q_E430<-q_E430 %>% 
+  mutate(Q_spe=resultat_obs_elab/105)
+
+q_E403<-q_E403 %>% 
+  mutate(Q_spe=resultat_obs_elab/392)
+
+q_E364<-q_E364 %>% 
+  dplyr::mutate(Q_spe=resultat_obs_elab/156)
+
+q_E35185<-q_E35185 %>% 
+  mutate(Q_spe=resultat_obs_elab/80)
+
+q_E35112<-q_E35112 %>% 
+  mutate(Q_spe=resultat_obs_elab/161)
+
+q_E236<-q_E236 %>% 
+  mutate(Q_spe=resultat_obs_elab/52)
+
+q_E182<-q_E182 %>% 
+  mutate(Q_spe=resultat_obs_elab/240)
+
+q_E176<-q_E176 %>% 
+  mutate(Q_spe=resultat_obs_elab/88.4)
+
+q_E172<-q_E172 %>% 
+  mutate(Q_spe=resultat_obs_elab/173)
+
+q_D020<-q_D020 %>% 
+  mutate(Q_spe=resultat_obs_elab/115)
+
+q_D013<-q_D013 %>% 
+  mutate(Q_spe=resultat_obs_elab/156)
+
+q_E649<-q_E649%>% 
+  mutate(Q_spe=resultat_obs_elab/96)
+
+q_E647<-q_E647 %>% 
+  mutate(Q_spe=resultat_obs_elab/5640)
+
+q_E642<-q_E642 %>% 
+  mutate(Q_spe=resultat_obs_elab/540)
+
+q_E64060<-q_E64060 %>% 
+  mutate(Q_spe=resultat_obs_elab/624)
+
+q_H705<-q_H705 %>% 
+  mutate(Q_spe=resultat_obs_elab/21)
+
+q_H702<-q_H702 %>% 
+  mutate(Q_spe=resultat_obs_elab/314)
+
+q_H714<-q_H714 %>% 
+  mutate(Q_spe=resultat_obs_elab/748)
+
+q_H730<-q_H730 %>% 
+  mutate(Q_spe=resultat_obs_elab/119)
+
+q_H552<-q_H552 %>% 
+  mutate(Q_spe=resultat_obs_elab/347)
+
+q_H740<-q_H740 %>% 
+  dplyr::mutate(Q_spe=resultat_obs_elab/4316)
+
+q_H742<-q_H742 %>% 
+  mutate(Q_spe=resultat_obs_elab/282)
+
+q_H751<-q_H751 %>% 
+  mutate(Q_spe=resultat_obs_elab/276)
+
+q_H760<-q_H760 %>% 
+  mutate(Q_spe=resultat_obs_elab/457)
+
+q_H774<-q_H774 %>% 
+  mutate(Q_spe=resultat_obs_elab/750)
+
+q_H781<-q_H781 %>% 
+  mutate(Q_spe=resultat_obs_elab/42)
+
+q_E334<-q_E334 %>% 
+  mutate(Q_spe=resultat_obs_elab/8,6)
+
+```
+
+
+Le calcule du VCN10 se fait en utilisant la fonction mean_run qui permet de calculer une moyenne glissante. 
+Changer le code de la station avec Ctrl+F pour calculer le VCN10 pour une autre station. 
+
+```{r, eval=FALSE}
+
+q_H760$date_obs_elab<-as.Date(q_H760$date_obs_elab) #conversion colonne date du data frame de débits journaliers en format date
+dates<-q_H760$date_obs_elab #création d'un vecteur de dates
+
+dates<-sort(dates, decreasing = FALSE)
+
+VCN10_H760<-
+  mean_run(q_H760$Q_spe,   # calcul d'une moyenne glissante des débits spécifiques sur k=10 jours 
+                       k = 10, 
+                       idx = dates
+                       )
+
+VCN10_H760<-data.frame(VCN10_H760, dates, annee=substr(dates, 1,4)) # création d'un data frame avec les moyennes glissantes, les dates et les années 
+
+VCN10_H760<-VCN10_H760 %>% 
+  dplyr::group_by(annee) %>% 
+  dplyr::summarise(VCN10_annuel=min(VCN10_H760)) # calcule du minimum par années des moyennes glissantes -> VCN10 annuel 
+
+
+```
+
+```{r}
+save(VCN10_D013, VCN10_D020, VCN10_E172, VCN10_E176, VCN10_E182, VCN10_E236, VCN10_E334, VCN10_E35112,VCN10_E35185, 
+     VCN10_E364, VCN10_E403, VCN10_E430, VCN10_E490, VCN10_E520, VCN10_E530, VCN10_E54003, VCN10_E5406, VCN10_E550,
+     VCN10_E64060, VCN10_E642, VCN10_E647, VCN10_E649, VCN10_H552,
+     VCN10_H702, VCN10_H705, VCN10_H714, VCN10_H730, VCN10_H740, VCN10_H742, VCN10_H751, VCN10_H760, VCN10_H774, 
+     VCN10_H781, file="processed_data/VCN10_annuels.RData")
+```
+
+Maintenant que l'on dispose de tous les VCN10 annuels par station, on peut les assembler au sein d'un même data frame pour pouvoir tracer les graphiques par la suite. 
+
+```{r}
+#assemblage en un seul data frame 
+
+VCN10<-rbind(VCN10_D013, VCN10_D020, VCN10_E172, VCN10_E176, VCN10_E182, VCN10_E236, VCN10_E334, VCN10_E35112,VCN10_E35185, 
+     VCN10_E364, VCN10_E403, VCN10_E430, VCN10_E490, VCN10_E520, VCN10_E530, VCN10_E54003, VCN10_E5406, VCN10_E550,
+     VCN10_E64060, VCN10_E642, VCN10_E647, VCN10_E649, VCN10_H552,
+     VCN10_H702, VCN10_H705, VCN10_H714, VCN10_H730, VCN10_H740, VCN10_H742, VCN10_H751, VCN10_H760, VCN10_H774, 
+     VCN10_H781) 
+
+```
+
+
+##### Représentation graphique des VCN10 
+
+```{r}
+VCN10 %>% 
+   ggplot(aes(x=annee, y=VCN10_annuel))+
+  geom_boxplot()+
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r}
+VCN10 %>% 
+  dplyr::group_by(annee) %>% 
+  dplyr::summarise(med_VCN10=median(VCN10_annuel)) %>% 
+   ggplot(aes(x=annee, y=med_VCN10))+
+  geom_col()+
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+## Evolution de la température 
+
+Les températures utilisées sont issues des mesures rélles de 33 stations du reseau RNT de l'OFB Hauts-de-France, complétées par les températures modélisées lors du projer TIGRE lorsque la température réelle n'est pas disponible. Cette analyse se fera sur la période 2008-2018, le projet TIGRE n'ayant pas modélisé les températures après 2018. Les données TIGRE sont au pas de temps journalier et reprennent sur la période 2008-2018 les températures réelles au pas de temps journalier (pas de temps horaire pour les données OFB versées dans le RNT).   
+
+### Création des data.frame de température
+
+#### Importation des fichiers de données du projet TIGRE 
+
+Les données de température de Hauts-de-France du projet TIGRE ont été fournies sous format csv par Eddy Cosson de la Direction Surveillance, Evaluation, Données, Service Eaux et Milieux Aquatiques de l'OFB. Un colonne de numéro de station a été rajoutée aux csv avant importation dans R. 
+
+```{r, eval=FALSE}
+# Importation des csv de température 
+
+t_1001336<-read.csv(file="raw_data/TIGRE_temp_Hdf/1001336.csv", sep=";")
+
+t_1004000<-read.csv(file="raw_data/TIGRE_temp_Hdf/1004000.csv", sep=";")
+
+t_1006000<-read.csv(file="raw_data/TIGRE_temp_Hdf/1006000.csv", sep=";")
+
+t_1009000<-read.csv(file="raw_data/TIGRE_temp_Hdf/1009000.csv", sep=";")
+
+t_1010000<-read.csv(file="raw_data/TIGRE_temp_Hdf/1010000.csv", sep=";")
+
+t_1029000<-read.csv(file="raw_data/TIGRE_temp_Hdf/1029000.csv", sep=";")
+
+t_1037000<-read.csv(file="raw_data/TIGRE_temp_Hdf/1037000.csv", sep=";")
+
+t_1045000<-read.csv(file="raw_data/TIGRE_temp_Hdf/1045000.csv", sep=";")
+
+t_1056000<-read.csv(file="raw_data/TIGRE_temp_Hdf/1056000.csv", sep=";")
+
+t_1071000<-read.csv(file="raw_data/TIGRE_temp_Hdf/1071000.csv", sep=";")
+
+t_1090000<-read.csv(file="raw_data/TIGRE_temp_Hdf/1090000.csv", sep=";")
+
+t_1100000<-read.csv(file="raw_data/TIGRE_temp_Hdf/1100000.csv", sep=";")
+
+t_1101000<-read.csv(file="raw_data/TIGRE_temp_Hdf/1101000.csv", sep=";")
+
+t_1115000<-read.csv(file="raw_data/TIGRE_temp_Hdf/1115000.csv", sep=";")
+
+t_1116000<-read.csv(file="raw_data/TIGRE_temp_Hdf/1116000.csv", sep=";")
+
+t_1129000<-read.csv(file="raw_data/TIGRE_temp_Hdf/1129000.csv", sep=";")
+
+t_1133000<-read.csv(file="raw_data/TIGRE_temp_Hdf/1133000.csv", sep=";")
+
+t_1134500<-read.csv(file="raw_data/TIGRE_temp_Hdf/1134500.csv", sep=";")
+
+t_1138300<-read.csv(file="raw_data/TIGRE_temp_Hdf/1138300.csv", sep=";")
+
+t_1140500<-read.csv(file="raw_data/TIGRE_temp_Hdf/1140500.csv", sep=";")
+
+t_1141100<-read.csv(file="raw_data/TIGRE_temp_Hdf/1141100.csv", sep=";")
+
+t_3128190<-read.csv(file="raw_data/TIGRE_temp_Hdf/3128190.csv", sep=";")
+
+t_3128270<-read.csv(file="raw_data/TIGRE_temp_Hdf/3128270.csv", sep=";")
+
+t_3129020<-read.csv(file="raw_data/TIGRE_temp_Hdf/3129020.csv", sep=";")
+
+t_3134730<-read.csv(file="raw_data/TIGRE_temp_Hdf/3134730.csv", sep=";")
+
+t_3136000<-read.csv(file="raw_data/TIGRE_temp_Hdf/3136000.csv", sep=";")
+
+t_3138390<-read.csv(file="raw_data/TIGRE_temp_Hdf/3138390.csv", sep=";")
+
+t_3142520<-read.csv(file="raw_data/TIGRE_temp_Hdf/3142520.csv", sep=";")
+
+t_3144475<-read.csv(file="raw_data/TIGRE_temp_Hdf/3144475.csv", sep=";")
+
+t_3152000<-read.csv(file="raw_data/TIGRE_temp_Hdf/3152000.csv", sep=";")
+
+t_3156000<-read.csv(file="raw_data/TIGRE_temp_Hdf/3156000.csv", sep=";")
+
+t_3162240<-read.csv(file="raw_data/TIGRE_temp_Hdf/3162240.csv", sep=";")
+
+t_3164180<-read.csv(file="raw_data/TIGRE_temp_Hdf/3164180.csv", sep=";")
+
+t_1001336<-read.csv(file="raw_data/TIGRE_temp_Hdf/1001336.csv", sep=";")
+
+
+```
+
+```{r, eval=FALSE}
+# création d'un seul data frame avec les températures 
+temperatures<-rbind(t_1001336,t_1004000,
+t_1006000,
+t_1009000,
+t_1010000,
+t_1029000,
+t_1037000,
+t_1045000,
+t_1056000,
+t_1071000,
+t_1090000,
+t_1100000,
+t_1101000,
+t_1115000,
+t_1116000,
+t_1129000,
+t_1133000,
+t_1134500,
+t_1138300,
+t_1140500,
+t_1141100,
+t_3128190,
+t_3128270,
+t_3129020,
+t_3134730,
+t_3136000,
+t_3138390,
+t_3142520,
+t_3144475,
+t_3152000,
+t_3156000,
+t_3162240,
+t_3164180,
+t_1001336
+)
+```
+
+
+Explication des colonnes du data frame : 
+
+Tw_raw : température de l'eau brutes réelles 
+Tw_detect : température de l'eau réelles avec corection des valeurs abérentes
+Ta : température de l'air 
+Tw_corr : température de l'eau modélisée 
+
+
+#### Mélange des données réelles et simulées 
+
+L'idée de cette partie est de créer une colonne dans le data frame "temperatures" qui contienne les données réelles quand elle sont disponibles, sinon les données modélisées. Cette colonne sera nommée "Tw_fusion". Une autre colonne "statut" sera créee, pour indiquée si les valeurs de températures de "Tw_fusion" sont réelles ou modélisées. 
+
+
+```{r, eval=FALSE}
+for(i in 1:129370){ # on parcours ligne par ligne la data frame de temperature 
+  
+  if(is.na(temperatures$Tw_detect[i])){   # si pour la ligne i il n'y a pas de donnée réelle de température (NA): 
+    temperatures$Tw_fusion[i] <- temperatures$Tw_corr[i] #la ligne i de Tw_fusion prends la valeur de la température modélisée 
+    temperatures$statut[i]<-"modelise" # la ligne i de "statut" indique que la valeur de température est modélisée 
+  }
+  else{  # sinon : 
+    temperatures$Tw_fusion[i] <- temperatures$Tw_detect[i] # la ligne i de la colonne Tw_fusion prends la valeur de la température réelle 
+    temperatures$statut[i]<-"reel" # la ligne i de la colonne "statut" indique que la valeur de tempéraure est réelle
+  }
+}
+```
+
+On sauvegarde le data frame de températures (d'autant plus important dans ce cas car la boucle for pour créer les colonnesTw_fusion et statut mets un peu de temps à tourner. Voir s'il n'est pas possible d'optimiser la création des colonnes). 
+
+```{r, eval=FALSE }
+save(temperatures, file="raw_data/temperatures.RData")
+```
+
+```{r}
+# Importation du data frame temperatures si pas déjà dans l'environnement 
+
+load(file="raw_data/temperatures.RData")
+```
+
+```{r}
+
+```
+
+### Calcul d'indicateurs de température 
+
+Les indicateurs de température chosis pour cette partie sont : 
+
+-les températures moyenne et maximum annuelles 
+-température maximale moyenne sur 7 jours consécutifs dans l'année 
+-les anomalies des températures moyennes annuelles par rapport à la moyenne internannuelle sur la période 2008-2018
+
+#### Calcul des températures moyennes et maximums annuelles 
+
+```{r}
+# Température moyenne 
+
+temperatures<- temperatures%>%
+  mutate(annee = as.factor(substr(Date, 7, 10))) %>%  # création d'une colonne année 
+  mutate(month=as.factor(substr(Date, 4, 5))) # création colonne de mois 
+
+mean_temp<-temperatures %>% 
+  dplyr::group_by(code_station,annee) %>%  #groupement par station et par année des températures journalières 
+  dplyr::summarise(T_moy=mean(Tw_fusion))  # calcul de la moyenne annuelle des températures 
+
+#Température maximum 
+
+max_temp<-temperatures %>% 
+  dplyr::group_by(code_station,annee) %>%  #groupement par station et par année des températures journalières 
+  dplyr::summarise(T_max=max(Tw_fusion))
+
+#rassemblement dans le même data frame
+
+temp_annee<-cbind(max_temp, mean_temp)
+
+temp_annee<-temp_annee %>% 
+  select(code_station=code_station...1, annee=annee...2, T_max, T_moy)
+
+temp_annee$annee<-as.factor(temp_annee$annee)
+temp_annee$code_station<-as.factor(temp_annee$code_station)
+  
+```
+
+#### Calcul des température moyennes et maximales mensuelles 
+
+```{r}
+mean_temp_mois<-temperatures %>% 
+  dplyr::group_by(month, annee) %>%   
+  dplyr::summarise(T_moy_mois=mean(Tw_fusion)) 
+
+mean_temp_mois$annee<-as.factor(mean_temp_mois$annee)
+
+max_temp_mois<-temperatures %>% 
+  dplyr::group_by(month,annee) %>%   
+  dplyr::summarise(T_max_mois=max(Tw_fusion))
+
+max_temp_mois$annee<-as.factor(max_temp_mois$annee)
+
+```
+
+Remarque : il est précisé dans le chunck ci-dessus que la fonction group_by doit provenir du package dplyr, car il y avait un problème d'interférence avec un autre package, probablement summarySE. Faire de même dans les autres chuncks si le résultat du group_by n'est pas celui attendu (une ligne unique par data frame). 
+
+
+#### Calcul de la température maximale moyenne sur 7 jours consécutifs 
+
+#### Calcul des anomalies de température 
+
+
+### Représentation graphique de la température sur la période 2008-2018
+#### Evolution des températures maximales et moyennes 
+
+```{r}
+temp_annee %>% 
+  ggplot()+
+  geom_boxplot(aes(x=annee, y=T_moy))+
+  geom_point(aes(x=annee, y=T_moy, color=code_station))
+  
+```
+
+```{r}
+temp_annee %>% 
+  ggplot()+
+  geom_boxplot(aes(x=annee, y=T_max))+
+  geom_point(aes(x=annee, y=T_max, color=code_station))
+```
+
+```{r}
+temp_annee %>% 
+  group_by(annee) %>% 
+  summarise(T_max=median(T_max)) %>% 
+  ggplot(aes(x=annee, y=T_max, group=1))+
+  geom_point(stat="summary")+stat_summary(geom="line")
+```
+
+
+
+```{r}
+# Histogramme T max annuelle 
+
+test<-temp_annee %>% 
+  summarySE(measurevar="T_max", groupvars = "annee") 
+
+test %>% 
+ggplot(aes(x = annee, y= T_max)) + 
+  geom_col() + 
+  geom_errorbar(aes(ymin=T_max-se, ymax=T_max+se),width=.2,  position=position_dodge(.9)) 
+```
+
+```{r}
+# Histogramme T moy annuelle 
+
+test<-temp_annee %>% 
+  summarySE(measurevar="T_moy", groupvars = "annee") 
+
+test %>% 
+ggplot(aes(x = annee, y= T_moy)) + 
+  geom_col() + 
+  geom_errorbar(aes(ymin=T_moy-se, ymax=T_moy+se),width=.2,  position=position_dodge(.9))
+  
+```
+
+```{r}
+# histogrammes Tmoy mensuel par année 
+
+ mean_temp_mois %>% 
+  ggplot(aes(x=month, y=T_moy_mois, fill=annee))+
+  geom_col(position='dodge', stat="identity")+
+  scale_fill_brewer(palette="Paired")
+```
+Remarque : les données de températures commencent en Aout 2008, il n'ya donc pas de barre pour 2008 pour les mois 1 à 7
+
+```{r}
+#histogramme Tmax mensuelle par année 
+
+max_temp_mois %>% 
+  ggplot(aes(x=month, y=T_max_mois, fill=annee))+
+  geom_col(position='dodge', stat="identity")+
+  scale_fill_brewer(palette="Paired")
 ```
 
 ## Evolution des paramètres "poisson"
@@ -377,691 +2054,466 @@ Remarque : Dans la data frame, la station de la sainte-marie est notée en RRP a
 
 ```{r}
 
-ipr_niv1<-ipr %>% 
-  drop_na() # suppression des NA 
+ipr<-ipr %>% 
+  drop_na() %>% # suppression des NA 
+  unique() 
 
-ipr_niv1$annee<-as.factor(ipr_niv1$annee) #conversion de la variable année de numérique à facteur 
-ipr_niv1$sta_id<-as.factor(ipr_niv1$sta_id)
+ipr$annee<-as.factor(ipr$annee) #conversion de la variable année de numérique à facteur 
+ipr$sta_id<-as.factor(ipr$sta_id)
   
 ```
 
-### L'Aisne 
 
-#### Evolution de l'IPR et de ses métriques 
+### Identification des stations à utiliser 
 
-Graphiques en boxplots de l'IPR et des ses métriques pour l'ensemble des stations de pêche du département en fonction des années: une boxplot représente une année, chaque point représente une station, identifiée par son numéro sta_id des tables aspe.
+Il s'agit ici d'identifier quelles stations de pêche prendre afin d'avoir un nombre constant de stations (les mêmes) sur une période suffisamment grande (idéalement au moins 2010-2022) pour pourvoir faire une comparaison inter annuelle qui ait du sens. 
 
-```{r, echo=FALSE}
-# Boxplot de la distibution des IPR par année sur le département 
-
-box_ipr_niv1_02<-ipr_niv1 %>% 
-  filter(dept=='02') %>% 
-  ggplot(aes(x=annee, y=ipr))+geom_boxplot()+
-  geom_point(aes(x=annee, y=ipr, color=sta_id))+ggtitle("IPR")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_ipr_niv1_02 #affichage 
-
-#Boxplots de la distribution des métriques de l'IPR par année sur le département 
-
-box_ner_niv1_02<-ipr_niv1 %>% 
-  filter(dept=='02') %>% 
-  ggplot(aes(x=annee, y=ner))+
-  geom_boxplot()+geom_point(aes(x=annee, y=ner, color=sta_id))+
-  ggtitle("NER")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_ner_niv1_02 #affichage 
-
-box_nel_niv1_02<-ipr_niv1 %>% 
-  filter(dept=='02') %>% 
-  ggplot(aes(x=annee, y=nel))+
-  geom_boxplot()+geom_point(aes(x=annee, y=nel, color=sta_id))+
-  ggtitle("NEL")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_nel_niv1_02 #affichage 
-
-box_nte_niv1_02<-ipr_niv1 %>% 
-  filter(dept=='02') %>% 
-  ggplot(aes(x=annee, y=nte))+geom_boxplot()+
-  geom_point(aes(x=annee, y=nte, color=sta_id))+
-  ggtitle("NTE")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_nte_niv1_02 #affichage 
-
-box_dit_niv1_02<-ipr_niv1 %>% 
-  filter(dept=='02') %>% 
-  ggplot(aes(x=annee, y=dit))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dit, color=sta_id))+
-  ggtitle("DIT") +
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dit_niv1_02 #affichage 
-
-box_dio_niv1_02<-ipr_niv1 %>% 
-  filter(dept=='02') %>% 
-  ggplot(aes(x=annee, y=dio))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dio, color=sta_id))+
-  ggtitle("DIO")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dio_niv1_02 #affichage 
-
-box_dii_niv1_02<-ipr_niv1 %>% 
-  filter(dept=='02') %>% 
-  ggplot(aes(x=annee, y=dii))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dii, color=sta_id))+
-  ggtitle("DII")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dii_niv1_02 #affichage 
-
-box_dti_niv1_02<-ipr_niv1 %>% 
-  filter(dept=='02') %>% 
-  ggplot(aes(x=annee, y=dti))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dti, color=sta_id))+
-  ggtitle("DTI")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dti_niv1_02 #affichage
-
-# Regroupement des graphiques de l'IPR et ses métriques 
-
-poiss_box_niv1_02<-ggarrange(box_ipr_niv1_02,box_ner_niv1_02, box_nel_niv1_02, box_nte_niv1_02, box_dit_niv1_02,box_dio_niv1_02, box_dii_niv1_02, box_dti_niv1_02, common.legend = TRUE) # affichage pas lisible sur le RMarkdown 
-
-```
-
-Pour les points de stations, il est possible de remplacer geom_point par geom_jitter, pour éviter le chevauchement de plusieurs points et pouvoir tous les voir (le graphique est en contrepartie un peu plus chargé). 
-
-#### Le Nord 
-
-Même graphiques que ci-dessus. 
-
-```{r, echo=FALSE}
-box_ipr_niv1_59<-ipr_niv1 %>% 
-  filter(dept=='59') %>% 
-  ggplot(aes(x=annee, y=ipr))+geom_boxplot()+
-  geom_point(aes(x=annee, y=ipr, color=sta_id))+ggtitle("IPR")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_ipr_niv1_59 #affichage 
-
-#Boxplots de la distribution des métriques de l'IPR par année sur le département 
-
-box_ner_niv1_59<-ipr_niv1 %>% 
-  filter(dept=='59') %>% 
-  ggplot(aes(x=annee, y=ner))+
-  geom_boxplot()+geom_point(aes(x=annee, y=ner, color=sta_id))+
-  ggtitle("NER")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_ner_niv1_59 #affichage 
-
-box_nel_niv1_59<-ipr_niv1 %>% 
-  filter(dept=='59') %>% 
-  ggplot(aes(x=annee, y=nel))+
-  geom_boxplot()+geom_point(aes(x=annee, y=nel, color=sta_id))+
-  ggtitle("NEL")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_nel_niv1_59 #affichage 
-
-box_nte_niv1_59<-ipr_niv1 %>% 
-  filter(dept=='59') %>% 
-  ggplot(aes(x=annee, y=nte))+geom_boxplot()+
-  geom_point(aes(x=annee, y=nte, color=sta_id))+
-  ggtitle("NTE")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_nte_niv1_59 #affichage 
-
-box_dit_niv1_59<-ipr_niv1 %>% 
-  filter(dept=='59') %>% 
-  ggplot(aes(x=annee, y=dit))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dit, color=sta_id))+
-  ggtitle("DIT") +
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dit_niv1_59 #affichage 
-
-box_dio_niv1_59<-ipr_niv1 %>% 
-  filter(dept=='59') %>% 
-  ggplot(aes(x=annee, y=dio))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dio, color=sta_id))+
-  ggtitle("DIO")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dio_niv1_59 #affichage 
-
-box_dii_niv1_59<-ipr_niv1 %>% 
-  filter(dept=='59') %>% 
-  ggplot(aes(x=annee, y=dii))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dii, color=sta_id))+
-  ggtitle("DII")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dii_niv1_59 #affichage 
-
-box_dti_niv1_59<-ipr_niv1 %>% 
-  filter(dept=='59') %>% 
-  ggplot(aes(x=annee, y=dti))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dti, color=sta_id))+
-  ggtitle("DTI")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dti_niv1_59 #affichage
-
-# Regroupement des graphiques de l'IPR et ses métriques 
-
-poiss_box_niv1_59<-ggarrange(box_ipr_niv1_59,box_ner_niv1_59, box_nel_niv1_59, box_nte_niv1_59, box_dit_niv1_59,box_dio_niv1_59, box_dii_niv1_59, box_dti_niv1_59, common.legend = TRUE)
-```
-
-#### L'Oise 
-
-```{r, echo=FALSE}
-box_ipr_niv1_60<-ipr_niv1 %>% 
-  filter(dept=='60') %>% 
-  ggplot(aes(x=annee, y=ipr))+geom_boxplot()+
-  geom_point(aes(x=annee, y=ipr, color=sta_id))+ggtitle("IPR")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_ipr_niv1_60 #affichage 
-
-#Boxplots de la distribution des métriques de l'IPR par année sur le département 
-
-box_ner_niv1_60<-ipr_niv1 %>% 
-  filter(dept=='60') %>% 
-  ggplot(aes(x=annee, y=ner))+
-  geom_boxplot()+geom_point(aes(x=annee, y=ner, color=sta_id))+
-  ggtitle("NER")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_ner_niv1_60 #affichage 
-
-box_nel_niv1_60<-ipr_niv1 %>% 
-  filter(dept=='60') %>% 
-  ggplot(aes(x=annee, y=nel))+
-  geom_boxplot()+geom_point(aes(x=annee, y=nel, color=sta_id))+
-  ggtitle("NEL")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_nel_niv1_60 #affichage 
-
-box_nte_niv1_60<-ipr_niv1 %>% 
-  filter(dept=='60') %>% 
-  ggplot(aes(x=annee, y=nte))+geom_boxplot()+
-  geom_point(aes(x=annee, y=nte, color=sta_id))+
-  ggtitle("NTE")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_nte_niv1_60 #affichage 
-
-box_dit_niv1_60<-ipr_niv1 %>% 
-  filter(dept=='60') %>% 
-  ggplot(aes(x=annee, y=dit))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dit, color=sta_id))+
-  ggtitle("DIT") +
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dit_niv1_60 #affichage 
-
-box_dio_niv1_60<-ipr_niv1 %>% 
-  filter(dept=='60') %>% 
-  ggplot(aes(x=annee, y=dio))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dio, color=sta_id))+
-  ggtitle("DIO")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dio_niv1_60 #affichage 
-
-box_dii_niv1_60<-ipr_niv1 %>% 
-  filter(dept=='60') %>% 
-  ggplot(aes(x=annee, y=dii))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dii, color=sta_id))+
-  ggtitle("DII")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dii_niv1_60 #affichage 
-
-box_dti_niv1_60<-ipr_niv1 %>% 
-  filter(dept=='60') %>% 
-  ggplot(aes(x=annee, y=dti))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dti, color=sta_id))+
-  ggtitle("DTI")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dti_niv1_60 #affichage
-
-# Regroupement des graphiques de l'IPR et ses métriques 
-
-poiss_box_niv1_60<-ggarrange(box_ipr_niv1_60,box_ner_niv1_60, box_nel_niv1_60, box_nte_niv1_60, box_dit_niv1_60,box_dio_niv1_60, box_dii_niv1_60, box_dti_niv1_60, common.legend = TRUE)
-```
-
-#### Le Pas-de-Calais 
-
-```{r, echo=FALSE}
-
-box_ipr_niv1_62<-ipr_niv1 %>% 
-  filter(dept=='62') %>% 
-  ggplot(aes(x=annee, y=ipr))+geom_boxplot()+
-  geom_point(aes(x=annee, y=ipr, color=sta_id))+ggtitle("IPR")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_ipr_niv1_62 #affichage 
-
-#Boxplots de la distribution des métriques de l'IPR par année sur le département 
-
-box_ner_niv1_62<-ipr_niv1 %>% 
-  filter(dept=='62') %>% 
-  ggplot(aes(x=annee, y=ner))+
-  geom_boxplot()+geom_point(aes(x=annee, y=ner, color=sta_id))+
-  ggtitle("NER")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_ner_niv1_62 #affichage 
-
-box_nel_niv1_62<-ipr_niv1 %>% 
-  filter(dept=='62') %>% 
-  ggplot(aes(x=annee, y=nel))+
-  geom_boxplot()+geom_point(aes(x=annee, y=nel, color=sta_id))+
-  ggtitle("NEL")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_nel_niv1_62 #affichage 
-
-box_nte_niv1_62<-ipr_niv1 %>% 
-  filter(dept=='62') %>% 
-  ggplot(aes(x=annee, y=nte))+geom_boxplot()+
-  geom_point(aes(x=annee, y=nte, color=sta_id))+
-  ggtitle("NTE")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_nte_niv1_62 #affichage 
-
-box_dit_niv1_62<-ipr_niv1 %>% 
-  filter(dept=='62') %>% 
-  ggplot(aes(x=annee, y=dit))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dit, color=sta_id))+
-  ggtitle("DIT") +
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dit_niv1_62 #affichage 
-
-box_dio_niv1_62<-ipr_niv1 %>% 
-  filter(dept=='62') %>% 
-  ggplot(aes(x=annee, y=dio))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dio, color=sta_id))+
-  ggtitle("DIO")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dio_niv1_62 #affichage 
-
-box_dii_niv1_62<-ipr_niv1 %>% 
-  filter(dept=='62') %>% 
-  ggplot(aes(x=annee, y=dii))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dii, color=sta_id))+
-  ggtitle("DII")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dii_niv1_62 #affichage 
-
-box_dti_niv1_62<-ipr_niv1 %>% 
-  filter(dept=='62') %>% 
-  ggplot(aes(x=annee, y=dti))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dti, color=sta_id))+
-  ggtitle("DTI")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dti_niv1_62 #affichage
-
-# Regroupement des graphiques de l'IPR et ses métriques 
-
-poiss_box_niv1_62<-ggarrange(box_ipr_niv1_62,box_ner_niv1_62, box_nel_niv1_62, box_nte_niv1_62, box_dit_niv1_62,box_dio_niv1_62, box_dii_niv1_62, box_dti_niv1_62, common.legend = TRUE)
-```
-
-#### La Somme 
-
-```{r, echo=FALSE}
-box_ipr_niv1_80<-ipr_niv1 %>% 
-  filter(dept=='80') %>% 
-  ggplot(aes(x=annee, y=ipr))+geom_boxplot()+
-  geom_point(aes(x=annee, y=ipr, color=sta_id))+ggtitle("IPR")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_ipr_niv1_80 #affichage 
-
-#Boxplots de la distribution des métriques de l'IPR par année sur le département 
-
-box_ner_niv1_80<-ipr_niv1 %>% 
-  filter(dept=='80') %>% 
-  ggplot(aes(x=annee, y=ner))+
-  geom_boxplot()+geom_point(aes(x=annee, y=ner, color=sta_id))+
-  ggtitle("NER")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_ner_niv1_80 #affichage 
-
-box_nel_niv1_80<-ipr_niv1 %>% 
-  filter(dept=='80') %>% 
-  ggplot(aes(x=annee, y=nel))+
-  geom_boxplot()+geom_point(aes(x=annee, y=nel, color=sta_id))+
-  ggtitle("NEL")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_nel_niv1_80 #affichage 
-
-box_nte_niv1_80<-ipr_niv1 %>% 
-  filter(dept=='80') %>% 
-  ggplot(aes(x=annee, y=nte))+geom_boxplot()+
-  geom_point(aes(x=annee, y=nte, color=sta_id))+
-  ggtitle("NTE")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_nte_niv1_80 #affichage 
-
-box_dit_niv1_80<-ipr_niv1 %>% 
-  filter(dept=='80') %>% 
-  ggplot(aes(x=annee, y=dit))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dit, color=sta_id))+
-  ggtitle("DIT") +
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dit_niv1_80 #affichage 
-
-box_dio_niv1_80<-ipr_niv1 %>% 
-  filter(dept=='80') %>% 
-  ggplot(aes(x=annee, y=dio))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dio, color=sta_id))+
-  ggtitle("DIO")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dio_niv1_80 #affichage 
-
-box_dii_niv1_80<-ipr_niv1 %>% 
-  filter(dept=='80') %>% 
-  ggplot(aes(x=annee, y=dii))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dii, color=sta_id))+
-  ggtitle("DII")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dii_niv1_80 #affichage 
-
-box_dti_niv1_80<-ipr_niv1 %>% 
-  filter(dept=='80') %>% 
-  ggplot(aes(x=annee, y=dti))+geom_boxplot()+
-  geom_point(aes(x=annee, y=dti, color=sta_id))+
-  ggtitle("DTI")+
-  theme(axis.text.x = element_text(angle = 90)) 
-
-box_dti_niv1_80 #affichage
-
-# Regroupement des graphiques de l'IPR et ses métriques 
-
-poiss_box_niv1_80<-ggarrange(box_ipr_niv1_80,box_ner_niv1_80, box_nel_niv1_80, box_nte_niv1_80, box_dit_niv1_80,box_dio_niv1_80, box_dii_niv1_80, box_dti_niv1_80, common.legend = TRUE)
-```
-
-## Niveau d'analyse 2
-
-### Données relatives aux populations piscicoles 
-
-#### Sélection des données sur l'IPR pour les 17 stations selectionnées 
-
-##### Correspondance des codes sandre et des sta_id
-
-Sélection dans la table "station" du package aspe des sta_id, code sandre et libellés des 17 stations selectionnées. 
+On peut commencer par regarder le nombre de stations pêchées par an :  
 
 ```{r}
-
-station_selec <-station %>% 
-  filter(sta_code_sandre %in% c('03112710','03162000',
-                                '03128935','01001336',
-                                '01028000','01089000',
-                                '03138390','03134730',
-                                '03133937','03133000',
-                                '01000729','01101000',
-                                '01053000','01133000',
-                                '01137000','01002230',
-                                '01120000')) %>% 
-  select(sta_id:sta_libelle_sandre) %>% 
-  unique()
-
+ipr %>% 
+ ggplot(aes(x=annee))+geom_histogram(stat="count")
 ```
 
-##### Selection de ces stations dans le tableau d'IPR 
+Le nombre de station est très variable selon les années. Le premier élement est que beaucoup de station font partie du réseau RCS, dont les pêches se font tous les deux ans. Ont peut distinguer les stations dont les prélèvement se font les années paires, et celles dont ils se font les années impaires. De plus, certaines stations ont été ouvertes pendant la période 2002-2022, modifiant là aussi les stations pêchées pour une année. 
 
-Grâce aux codes sta_id ci-dessus, il est possible de filtrer le tableau d'IPR pour ne garder que les données des stations qui nous intéressent pour l'état des lieux (el). 
+Une stratégie possible pour conserver les mêmes stations tous les ans est de ne conserver que les stations des réseaux RRP et RHP (pêchées chaque année) pêchées jusqu'en 2022, ou de ne garder que les stations des années paires (qui incluent donc une pêche en 2022, année de sécheresse la plus identifiable). 
 
-```{r}
+```{r} 
 
-ipr_el <-ipr %>% 
-  filter(sta_id %in% c('6134','5401','5483','19','267','4959',
-                       '5442','122','208','250','5534','5307',
-                       '44','85','149','188','273')) %>% # sélection des stations choisies
-  drop_na()  # on ne garde pas les lignes qui contiennent des NA 
+# Ajout d'une colonne code_sandre à "ipr" pour plus facilement identifier les stations 
+
+ipr<-merge(ipr, station, by="sta_id") %>% 
+  select(sta_id, dept, obj_libelle, ipr, cli_libelle, ope_date:sta_code_sandre)
+```
+
+```{r} 
+
+# Nombre de stations des réseaux RHP et RCS pêchées en 2022 
+
+ipr %>% 
+  filter(annee==2022 & obj_libelle %in% c("RHP – Réseau Hydrobiologique Piscicole", 
+                            "RRP – Réseau de Référence Pérenne")) %>% 
+  distinct(sta_id)
+  
   
 ```
 
-Remarque : les stations 4959 et 5307 font partie du reseau RRP 
+Il y a visiblement 16 stations répertoriées comme RHP ou RRP pêchées en 2022 (avec probablement des erreurs, comme pour la Sainte-Marie qui est répertoriée comme RRP pour une année). 
 
-Les noms des stations de pêche dans le data frame ne correspondent pas aux noms des stations sandre (et il y a en plus différentes écritures pour une même station). Le data.frame ipr_el est exporté en fichier excel pour pouvoir être plus facilement modifié. Il sera ré-importé après modification de tous les noms de station. 
-
-```{r, eval=FALSE}
-# Export du data frame en Excel 
-
-write.xlsx(ipr_el, file="raw_data/ipr_el_non_corrige.xlsx")
-
-```
+Il faut maintenant identifier les stations avec des données jusque 2022.
 
 ```{r}
-#Import du fichier excel corrigé
+# création d'une grande palette de couleur (22 couleurs) contrastée pour faciliter la lecture graphique 
 
-ipr_el<-read.xlsx("raw_data/ipr_el_corrige.xlsx") %>% 
-  select(dept,sta_id,obj_libelle,ipr,cli_libelle,annee:dti) #selection des colonnes les plus interessantes 
-
-
+palette<-c('#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075', '#808080', '#ffffff', '#000000')
 ```
-
-
-#### Visualisation globale des IPR et de leurs métriques 
-
-##### Distribution statistique des variables 
-
-
-On vérifie si la distribution des IPR et de ses métriques est normale (pour savoir s'il est possible de faire des moyennes, écarts-types, des ANOVA etc.). Pour cela, il est possible d'utiliser un test de Shapiro. 
-
-```{r}
-shapiro.test(ipr_el$ipr) # Marche pas quand j'utilise %>% je sais pas pk, voir comment rendre ça plus efficace
-
-shapiro.test(ipr_el$ner) 
-
-shapiro.test(ipr_el$nel)
-
-shapiro.test(ipr_el$nte)
-
-shapiro.test(ipr_el$dit)
-
-shapiro.test(ipr_el$dio)
-
-shapiro.test(ipr_el$dii)
-
-shapiro.test(ipr_el$dti) 
-
-```
-
-Les données d'IPR et de ses métriques ne sont pas normalement distribuées. 
-
-```{r}
-
-# Visualisation de la distribution de l'IPR/ses métriques, avec comparaison avec une distribution normale 
-
-ipr_el %>% 
-  ggdensity(x = "ipr", fill = "lightgray", title = "IPR density") +
-  stat_overlay_normal_density(color = "red", linetype = "dashed")
-
-ipr_el %>% 
-  ggdensity(x = "ner", fill = "lightgray", title = "NER density") +
-  stat_overlay_normal_density(color = "red", linetype = "dashed")
-
-ipr_el %>% 
-  ggdensity(x = "nel", fill = "lightgray", title = "NEL density") +
-  stat_overlay_normal_density(color = "red", linetype = "dashed")
-
-ipr_el %>% 
-  ggdensity(x = "nte", fill = "lightgray", title = "NTE density") +
-  stat_overlay_normal_density(color = "red", linetype = "dashed")
-
-ipr_el %>% 
-  ggdensity(x = "dit", fill = "lightgray", title = "DIT density") +
-  stat_overlay_normal_density(color = "red", linetype = "dashed")
-
-ipr_el %>% 
-  ggdensity(x = "dio", fill = "lightgray", title = "DIO density") +
-  stat_overlay_normal_density(color = "red", linetype = "dashed")
-
-ipr_el %>% 
-  ggdensity(x = "dii", fill = "lightgray", title = "DII density") +
-  stat_overlay_normal_density(color = "red", linetype = "dashed")
-
-ipr_el %>% 
-  ggdensity(x = "dti", fill = "lightgray", title =  "DTI density") +
-  stat_overlay_normal_density(color = "red", linetype = "dashed")
-
-```
-
-Remarque : Erreur "Error in gzfile(file, "wb")  : cannot open the connection" quand ligne exécutée depuis le RMarkdown (pas quand executée dans la console). Les graphiques s'affichent, mais l'erreur aussi. 
-
-
-Essai de transformation de IPR/métriques en données normales par application du log10 : 
-
-```{r}
-
-shapiro.test(log(ipr_el$ipr))
-
-shapiro.test(log(ipr_el$ner))
-
-shapiro.test(log(ipr_el$nel))
-
-shapiro.test(log(ipr_el$nte))
-
-shapiro.test(log(ipr_el$dit))
-
-shapiro.test(log(ipr_el$dio))
-
-shapiro.test(log(ipr_el$dii))
-
-shapiro.test(log(ipr_el$dti))
-
-
-```
-
-La variable log(ipr) est normalement distribuée, mais l'application du log n'a pas permi de normaliser les métriques de l'ipr. Des essais d'autres opérations ont été effectués dans la console (1/x, sqrt, log10(max(x+1) - x)), mais aucune n'a permi de normaliser les métriques de l'IPR. 
-
-
-##### Evolution globale par station et par département de l'IPR et de ses métriques 
-
-###### L'Aisne 
-
-```{r}
-
-#Evolution de l'IPR 
-
-evol_ipr_02<-ipr_el %>% 
-  filter(dept=='02') %>% 
-  ggplot(aes(x=annee, y=ipr, color=pop_libelle))+geom_line(linetype='dashed')+geom_point()+ggtitle("IPR") 
-
-# Evolution des métriques 
-
-evol_ner_02<-ipr_el %>% 
-  filter(dept=='02') %>% 
-  ggplot(aes(x=annee, y=ner, color=pop_libelle))+geom_point()+geom_line(linetype='dashed')+ggtitle("Métrique NER")
-
-evol_nel_02<-ipr_el %>% 
-  filter(dept=='02') %>% 
-  ggplot(aes(x=annee, y=nel, color=pop_libelle))+geom_point()+geom_line(linetype='dashed')+ggtitle("Métrique NEL")
-
-evol_nte_02<-ipr_el %>% 
-  filter(dept=='02') %>% 
-  ggplot(aes(x=annee, y=nte, color=pop_libelle))+geom_point()+geom_line(linetype='dashed')+ggtitle("Métrique NTE")
-
-evol_dit_02<-ipr_el %>% 
-  filter(dept=='02') %>% 
-  ggplot(aes(x=annee, y=dit, color=pop_libelle))+geom_point()+geom_line(linetype='dashed')+ggtitle("Métrique DIT")
-
-evol_dio_02<-ipr_el %>% 
-  filter(dept=='02') %>% 
-  ggplot(aes(x=annee, y=dio, color=pop_libelle))+geom_point()+geom_line(linetype='dashed')+ggtitle("Métrique DIO")
-
-evol_dii_02<-ipr_el %>% 
-  filter(dept=='02') %>% 
-  ggplot(aes(x=annee, y=dii, color=pop_libelle))+geom_point()+geom_line(linetype='dashed')+ggtitle("Métrique DII")
-
-evol_dti_02<-ipr_el %>% 
-  filter(dept=='02') %>% 
-  ggplot(aes(x=annee, y=dti, color=pop_libelle))+geom_point()+geom_line(linetype='dashed')+ggtitle("Métrique DTI")
-
-ggarrange(evol_ipr_02,evol_ner_02, evol_nel_02, evol_nte_02, evol_dit_02, evol_dio_02, evol_dii_02, evol_dti_02, common.legend = TRUE)
-
-```
-
 
 
 ```{r}
-# Evolution des métriques pour le département par année 
+# graphique en histogramme stack de l'ipr par station RRp ou RHP depuis 2002, qui permet de voir les stations ayant de la données par année
 
-ipr_el %>% 
-  filter(dept=='02') %>% 
-  ggplot(aes(x=annee, y=ner, color=pop_libelle))+geom_point()+geom_line(linetype='dashed')+ggtitle("Evolution de la métrique NER en fonction des années pour les stations de l'Aisne")
-
+ipr %>% 
+  filter(sta_id %in% c("123", "154", "203", "209", "262",
+                       "4959", "278", "4830", "5307", "5503",
+                       "5314", "5930", "5980", "6168", "6434",
+                       "7")) %>%
+  ggplot(aes(x=annee, y=ipr, fill=sta_id))+
+  geom_col(position='stack', stat="identity")+
+  theme(axis.text.x = element_text(angle = 90))+
+  scale_fill_manual(values=palette)
+  
+  
 ```
 
-###### Le Nord 
+Les seules stations disposant de données tous les ans sur la période 2010-2022 sont les stations :
+
+-7 (la slack à rinxent)
+-5930 (l'aisne à condes sur aisne)
+-5980 (l'aisne à choisy au bac)
+-5503 (l'oise à ponte saint maxence)
+-4830 (l'ourcq à ferre en tardenois)
+-209 (l'aa à verchocque)
+
+Pour les stations RRP et RHP ayant des données tous les deux ans sur la période 2010-2022 : 
 
 ```{r}
 
-#Evolution de l'IPR 
+# création de deux vecteurs de date pour ne pas avoir à tout taper à chaque fois
 
-ipr_el %>% 
-  filter(dept=='59') %>% 
-  ggplot(aes(x=annee, y=ipr, color=pop_libelle))+geom_line(linetype='dashed')+geom_point()+ggtitle("Evolution de l'IPR en fonction des années pour les stations du Nord") 
-
+periode<-c("2010","2011","2012", "2013", "2014", "2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022")
+periode2<-c("2010", "2012", "2014", "2016", "2018", "2020", "2022")
 ```
 
-###### L'Oise 
+
+```{r}
+# graphique en histogramme stack de l'ipr par station en fonction de la période 2, qui permet de voir les stations ayant de la données par année 
+
+ipr %>% 
+  filter(sta_id %in% c("123", "154", "203", "209", "262",
+                       "4959", "278", "4830", "5307", "5503",
+                       "5314", "5930", "5980", "6168", "6434",
+                       "7") & annee %in% periode2) %>%
+  ggplot(aes(x=annee, y=ipr, fill=sta_id))+
+  geom_col(position='stack', stat="identity")+
+  theme(axis.text.x = element_text(angle = 90))+
+  scale_fill_manual(values=palette)
+  
+```
+9 stations RHP et RRP disposent de données tous les deux ans depuis 2010. Ce sont les stations 7, 154, 209,262, 4830, 5307, 5503, 5930, 5980. 
+
+On peut effectuer la même démarche que ci-dessus pour identifier les stations RCS des années paires ayant des données entre 2010 et 2022. 
 
 ```{r}
 
-#Evolution de l'IPR 
+# Nombre de stations de pêches RCS avec des données en 2022
 
-ipr_el %>% 
-  filter(dept=='60') %>% 
-  ggplot(aes(x=annee, y=ipr, color=pop_libelle))+geom_line(linetype='dashed')+geom_point()+ggtitle("Evolution de l'IPR en fonction des années pour les stations de l'Oise") 
+sta_id_RCS<-ipr %>%  #création d'un data frame de une colonne contenant les sta_id des stations RCS de 2022
+  filter(annee==2022 & obj_libelle=="RCS – Réseau de Contrôle de Surveillance") %>% 
+  distinct(sta_id) 
+
+sta_id_RCS$sta_id<-as.character(sta_id_RCS$sta_id)
+sta_id_RCS<-as.vector(sta_id_RCS$sta_id) # conversion du data frame en vecteur 
 
 ```
 
-###### Le Pas-de-Calais 
+47 stations de RCS disposent de données en 2022. 
 
 ```{r}
 
-#Evolution de l'IPR 
+nb_sta_RCS<-ipr %>% 
+  filter( annee %in% periode2 & sta_id %in% sta_id_RCS & 
+            obj_libelle=="RCS – Réseau de Contrôle de Surveillance") %>%
+  dplyr::group_by(sta_id) %>% 
+  dplyr::summarise(nb_annee=n()) 
 
-ipr_el %>% 
-  filter(dept=='62') %>% 
-  ggplot(aes(x=annee, y=ipr, color=pop_libelle))+geom_line(linetype='dashed')+geom_point()+ggtitle("Evolution de l'IPR en fonction des années pour les stations du Pas-de-Calais") 
+sta_id_RCS<-nb_sta_RCS %>% 
+  filter(nb_annee>=7)
 
+sta_id_RCS<-as.vector(sta_id_RCS$sta_id)
+  
 ```
 
-###### La Somme 
+Le code ci-dessous renvoie les nombre d'année avec des données sur les années paires de la période 2010-2022 (nb_sta_RCS). Idéalement, il faudrait que les stations ait un nombre d'année égal à 7 (un prélèvement sur les années paires entre 2010 et 2022). C'est pourquoi ne sont gardées que les stations dont le nombre d'années de nb_sta_RCS est suppérieur ou égal à 7. 
+
+Il y a 16 stations qui à priori disposent de données tous les deux ans sur la période 2010-2022. 
+
+Nous pouvons vérifier qu'elles ont effectivement assez de données en traçant le graphique suivant : 
 
 ```{r}
-#Evolution de l'IPR 
 
-ipr_el %>% 
-  filter(dept=='80') %>% 
-  ggplot(aes(x=annee, y=ipr, color=pop_libelle))+geom_line(linetype='dashed')+geom_point()+ggtitle("Evolution de l'IPR en fonction des années pour les stations de la Somme") 
+ipr %>% 
+  filter(sta_id %in% sta_id_RCS & annee %in% periode2) %>%
+  ggplot(aes(x=annee, y=ipr, fill=sta_id))+
+  geom_col(position='stack', stat="identity")+
+  theme(axis.text.x = element_text(angle = 90))+
+  scale_fill_manual(values=palette)  
+  
+```
+
+Toutes les 16 stations filtrées ont effectivement de la données tous les deux ans depuis 2010. 4 des stations RCS filtrées sont aussi des stations RHP ayant de la donnée ces années-là (mêmes prélèvement mais nom de réseau différent). 
+
+On se retrouve finalement avec 20 stations de pêches tous réseaux confondus qui permettent d'étudier les données piscicoles tous les deux ans de 2010 à 2022 et 6 stations (RHP et RRP) qui permettent d'étudier les données tous les deux ans de 2010 à 2022.   
+
+```{r}
+#création du vecteur des 20 stations avec données tous les deux ans entre 2010 et 2022 
+
+sta_peche<-c(sta_id_RCS,"209", "262", "4830", "5930")
+```
+
+On peut vérifier que ces stations ont le bon nombre de données, et voir si on ne peut pas étendre la période:
+
+```{r}
+ipr %>% 
+  filter(sta_id %in% sta_peche & annee %in% c("2002", "2004", "2006", "2008", "2010", "2012", "2014", "2016", "2018", "2020", "2022")) %>%
+  ggplot(aes(x=annee, y=ipr, fill=sta_id))+
+  geom_col(position='stack', stat="identity")+
+  theme(axis.text.x = element_text(angle = 90))+
+  scale_fill_manual(values=palette)
+```
+On constate qu'en 2008 ces stations ont aussi de la donnée. On peut donc étendre la période au années paires entre 2008 et 2022, soit 8 années. 
+
+### Création de modèles linéaires  
+
+L'idée de cette partie est d'essayer de créer des modèles linéaires pour chacun des indicateurs "poisson" utilisé, du type Indicateur~(Facteur1 + Facteur 2 etc.), pour identifier les éventuels efets significatifs des dits facteurs sur les poissons. 
+
+On essayera dans cette partie de tester les facteurs Sécheresse (trois modalités : pas_secheresse, secheresse, post_secheresse) et éventuellement station (sta_id), afin de voir si on retrouve un effet significative des grande tendences de sécheresse sur les poissons ou si les particularités individuelles des stations ont le plus d'influence. Ce test pourra par exemple être fait via une ANOVA si les conditions de validité de l'ANOVA sont respectées. 
+
+#### Construction du data frame de travail 
+
+```{r}
+# selection des stations et des années étudiées 
+
+ipr_travail<-ipr %>% 
+  filter(sta_id %in% sta_peche, annee %in% c("2008",periode2))
+
+# création d'une colonne pour le facteur sécheresse 
+
+ipr_travail[ipr_travail$annee %in% c("2018", "2020", "2022") ,"secheresse"] <- "secheresse"
+ipr_travail[ipr_travail$annee=="2012", "secheresse"] <- "post_secheresse"
+ipr_travail[ipr_travail$annee %in% c("2008", "2010", "2014", "2016") ,"secheresse"] <- "pas_secheresse"
+ 
+ipr_travail$secheresse<-ordered(ipr_travail$secheresse, levels=c("pas_secheresse", "secheresse", "post_secheresse"))
+```
+
+#### Modèle du nombre total d'espèces
+
+
+```{r}
+# ecriture du modèle 
+
+library(lmtest)
+
+mod_nte<-lm(data=ipr_travail, nte~secheresse) #modèle linéaire 
+plot(mod_nte)
+summary(mod_nte)
+
+```
+
+Vérifions maintenant les conditions de validité du modèle qui sont :
+
+-la normalité des résidus du modèle 
+-l'homoscédasiticté des résidus du modèle 
+
+```{r}
+# condition de normalité
+
+res_nte<-residuals(mod_nte) #résidus du modèle 
+shapiro.test(res_nte) 
+
+```
+Les résidus du modèle ne sont pas normalement distribués. Ceci est confirmé par l'allure du QQ-plot. 
+
+```{r}
+# homoscédasticité 
+
+bptest(mod_nte)
+
+```
+
+L'homoscédasticité des résidus n'est pas respectée.Ceci est confirmé par le Scale-Location graphique. De plus, sur ce graphique, on peut voir un défaut d'indépendence des résidus, car plusieurs points semblent aller par groupes.    
+
+Les conditions de validité du modèle ne sont pas respectées, donc les résultats ne sont pas validés et le modèle ne peut pas être utilisé en l'état. 
+Il est possisble d'essayer de transformer la variable nte en appliquant par exemple une fonction log ou racine carrée. 
+
+```{r}
+# transformation de la variable nte
+
+ipr_travail<-ipr_travail %>% 
+  mutate(log_nte=log(nte)) %>% 
+  mutate(sqrt_nte=sqrt(nte))
+```
+
+On peut réessayer de construire un modèle avec la variable transformée : 
+
+```{r}
+mod_nte_log<-lm(data=ipr_travail, log_nte~secheresse) #modèle linéaire 
+
+summary(mod_nte_log)
+plot(mod_nte_log)
+
+res_nte_log<-residuals(mod_nte_log)
+shapiro.test(res_nte_log)
+
+
+bptest(mod_nte_log)
+
+```
+
+La condition de normalité n'est toujours pas respectée pour la transformation logarithmique, mais celle d'homoscédasticité l'est. (les modèles linéaires sont dits plutot robuste à la non normalité, est-ce que c'est possible, du coup, d'utiliser le modèle même avec des résidus non normaux ?)
+
+```{r}
+mod_nte_sqrt<-lm(data=ipr_travail, sqrt_nte~secheresse) #modèle linéaire 
+
+summary(mod_nte_sqrt)
+plot(mod_nte_sqrt)
+
+res_nte_sqrt<-residuals(mod_nte_sqrt)
+shapiro.test(res_nte_sqrt)
+
+
+bptest(mod_nte_sqrt)
+```
+Comme pour la transformation log, la normalité n'est toujours pas respectée (mais les résidus semblent se rapprocher plus de la normalité que pour le log, avec une p-value du test de shapiro plus élevée et un qqplot un peu plus satisfaisant), mais l'homoscédasticité l'est. 
+
+##### Test de Kruskall Wallis 
+
+```{r}
+
+kruskal.test(nte~secheresse, data=ipr_travail)
+
+kruskal.test(nte~annee, data=ipr_travail)
+
+kruskal.test(nte~sta_id, data=ipr_travail)
+
+```
+Le test de Kruskal Wallis renvoie une p-value non significative : le facteur sécheresse n'a pas d'effet significatif sur le nombre total d'espèces. Le facteur annee non plus. En revanche, le facteur station a un effet significatif sur le nte, ce qui indique un impact fort (et logique) des particularités des stations (caractéristiques physico-chimique, morphologique etc.) sur le nombre d'espèces de poisson. 
+
+
+##### Distribution du nte (boxplot)
+
+```{r}
+ipr_travail %>% 
+  ggplot(aes(x=annee, y=nte, fill=secheresse))+geom_boxplot()+
+  scale_fill_manual(values=palette)+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+  
+```
+
+IL n'y a aucune difference significative entre les années, malgré le fait que l'on puisse croire que les années 2012 et 2022 présentent un nte plus faible que les autres. Il semblerait que l'on puisse observer une tendence à la décroissance du nombre total d'espèces depuis 2018, mais rien ne permet de l'affirmer.   
+
+```{r}
+
+ipr_travail %>% 
+  ggplot(aes(x=secheresse, y=nte, fill=secheresse))+geom_boxplot()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+
+```
+
+Les distributions pour les groupes pas_secheresse, secheresse et post_secheresse ne sont pas significativement differentes. On observe toutefois une décroissance des médianes dans l'ordre pas_secheresse, secheresse, post_secheresse. De plus, il faut être prudent, car la modalité post_secheresse ne contient qu'une annee (2012), les autres annees post_secheresse étant des années impaires. De plus, certaines années sont à la fois des années de sécheresse et des années post-sécheresse, comme 2020. (ajouter une modalite post_et_sech ?)   
+
+##### Essai d'agrégation du nte au niveau régional 
+
+L'idée de cette partie est d'essayer de voir s'il est possible d'agréger le nombre total d'espèces sur les 20 stations étudiées en dénombrant pour une année toutes les espèces différentes sur les 20 stations. 
+
+Le data frame support sera celui des mesures individuelles, qui comporte le listing des espèces, et pas le data frame d'IPR et ses métriques. 
+
+```{r}
+# Construction du data frame de travail 
+
+mei_travail<-mei_hdf %>% 
+  filter(sta_id %in% sta_peche & annee %in% c("2008",periode2)) %>% 
+  select(sta_id, pop_libelle:annee, esp_code_alternatif, mei_taille)
+
+mei_travail$annee<-as.factor(mei_travail$annee)
+
+# Data frame contant par année le nombre d'individus par espèces sur les 20 stations 
+
+mei_nte<-mei_travail %>% 
+  dplyr::group_by(annee, esp_code_alternatif) %>% 
+  dplyr::summarise(nb_tot=n())
+
+
+mei_nte[mei_nte$annee %in% c("2018", "2020", "2022") ,"secheresse"] <- "secheresse"
+mei_nte[mei_nte$annee=="2012", "secheresse"] <- "post_secheresse"
+mei_nte[mei_nte$annee %in% c("2008", "2010", "2014", "2016") ,"secheresse"] <- "pas_secheresse"
+
+mei_nte$secheresse<-as.factor(mei_nte$secheresse)
+
+
+```
+
+Le data frame mei_nte permet d'avoir accès à l'information nombre d'espèces par année et nombre d'individus par espèces par année sur l'ensemble des 20 stations. 
+
+```{r}
+# evolution du nombre total d'espèces sur les 20 stations 
+
+mei_nte %>% 
+  ggplot(aes(x=annee, fill=secheresse))+geom_histogram(stat="count")+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+                    
+```
+On ne peut pas observer grand chose sur le graphique ci-dessus. Il ne semble y avoir aucun lien entre les sécheresse et le nombre total d'espèces sur la région.  
+
+```{r}
+# Bubble plot 
+
+mei_nte %>% 
+  ggplot(aes(x = annee, y = esp_code_alternatif)) + 
+  geom_point(aes(size = nb_tot, fill = secheresse), alpha = 0.75, shape = 21)+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+  
+```
+
+##### Analyse à la station 
+
+###### Calcul des effectifs par espèce et par année  
+
+```{r} 
+
+# Construction du data frame 
+
+#calcule du nombre d'individus par espèce pour une station et une années données 
+mei_nte_sta<-mei_travail %>% 
+  dplyr::group_by(sta_id,annee, esp_code_alternatif) %>% 
+  dplyr::summarise(nb_tot=n()) 
+
+# ajout de la colonne de moldaité de sécheresse 
+mei_nte_sta[mei_nte_sta$annee %in% c("2018", "2020", "2022") ,"secheresse"] <- "secheresse" 
+mei_nte_sta[mei_nte_sta$annee=="2012", "secheresse"] <- "post_secheresse"
+mei_nte_sta[mei_nte_sta$annee %in% c("2008", "2010", "2014", "2016") ,"secheresse"] <- "pas_secheresse"
+
+#conversion de la colonne de sécheresse en facteur 
+mei_nte_sta$secheresse<-as.factor(mei_nte_sta$secheresse)
+
+
+# Calcule du nombre total d'individus capturé par années et par station 
+
+# calcule du nombre total d'individus capturé pour chaque pêche (une station et une année)
+tot_peche<-mei_travail %>% 
+  dplyr::group_by(sta_id, annee) %>% 
+  dplyr::summarise(nb_tot_peche=n())
+
+#ajout par jointure d'une colonne du nombre total d'individus par pêche au data frame du nombre d'individus par espèces 
+mei_nte_sta<-merge(tot_peche,mei_nte_sta, by=c("sta_id","annee"))
+
+
+```
+
+Le data frame mei_nte_sta contient maintenant l'annee, le identifiant de station, le nombre total d'individus pêchés pour cette année à cette station (nb_tot_peche), le code espèce et le nombre d'individus pêchés par espèce (nb_tot).
+
+```{r}
+# Calcule des effectifs par espèces par années par station 
+
+mei_nte_sta<- mei_nte_sta %>% 
+  mutate(effectif=(nb_tot/nb_tot_peche)*100)
+```
+
+Une colonne effectif a été rajoutée qui donne en pourcentage l'effectif de l'espèce pour une station et une année données. 
+
+```{r}
+#sauvegarde en RData du tableau des effectifs par station 
+
+save(mei_nte_sta, file="processed_data/effectifs_especes_stations.RData")
 ```
 
 
-2022 2017 2019 (2012 assecs tardifs) 
+###### Représentation graphique en bubble plot de l'évolution des effectifs par station 
+
+```{r}
+mei_nte_sta %>% 
+  filter(sta_id %in% c("7", "48", "92", "109", "137","149")) %>% # choix des stations à affichier (ici 6 sur 20 pour une question de lisibilité)
+  ggplot(aes(x = annee, y = esp_code_alternatif)) + 
+  geom_point(aes(size = effectif, fill = secheresse),alpha=0.65, shape = 21)+ # création de point de taille selon effectif
+  scale_size(range = c(1, 5), breaks = c(1,20,40,60))+ # ajustement de la légende (taille de cercle, valeurs indiquées)
+  theme(axis.text.x = element_text(angle = 90))+ 
+  theme(axis.text.y = element_text(size = 5)) +
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  facet_wrap(~sta_id, scale='free') # plot des résultats selon la station (un panneau par station) sur le même graph 
+
+
+```
+
+On peut ajouter à ces graphiques en bulles la courbe de la richesse spécifique (nombre d'espèces) par année et par station. 
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
 
