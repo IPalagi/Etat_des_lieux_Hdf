@@ -23,7 +23,12 @@ library(ggpubr) # package pour la réalisation de certains graphiques
 library(openxlsx) #package pour importer/exporter des Excel 
 library(hydroTSM) #package traitement/analyse de séries temporelles liées à l'hydrologie 
 library(Rmisc) # pour le traitement de données, notamment les barres d'erreurs sur les graphiques 
-library(runner)
+library(runner) # pour le calcule de moyennes glissanes 
+library(lubridate) #pour la manipulation de dates 
+library(magrittr)
+library(rcompanion) #pour le test stats de Scheirer Ray Hare
+library(agricolae) # pour certains tests statisiques post hoc ou de vérification de validité de modèles 
+library(lme4) # pour les modèles linéaires mixtes 
 
 ```
 
@@ -868,8 +873,8 @@ save(duree_sech, file="raw_data/duree_sech.RData")
 ```
 
 ```{r}
-load(file="raw_data/duree_sech.RData")
-load(file="raw_data/duree_sech_cont.RData")
+load(file="processed_data/duree_sech.RData")
+load(file="processed_data/duree_sech_cont.RData")
 ```
 
 ##### Représentation visuelle de la durée de la sécheresse en jours 
@@ -899,8 +904,8 @@ Ces périodes correspodent relativement bien au ressenti de l'établissement sur
 #nombre de stations en situation de sécheresse par an 
 
 duree_sech_sum<-duree_sech%>% 
-  group_by(annee) %>% # groupement par année
-  summarise(nb_stations_sech=sum(duree_sech>0)) # calcule par année du nombre de station pour lequel la durée de sécheresse est non nulle 
+  dplyr::group_by(annee) %>% # groupement par année
+  dplyr::summarise(nb_stations_sech=sum(duree_sech>0)) # calcule par année du nombre de station pour lequel la durée de sécheresse est non nulle 
 
 ```
 
@@ -1325,8 +1330,8 @@ Pour le calcul des débits mensuels de référence (code ci-dessous), remplacer 
 
 qm_ia_D013 <- qm_D013 %>%
   mutate(month = as.integer(substr(date_obs_elab, 6, 7))) %>% # création d'une colonne contenant uniquement  le mois
-  group_by(month) %>%
-  summarise(Qm_ia = mean(resultat_obs_elab)) # calcul des moyennes des débits mensuels regroupées par mois sur la période 1992-2022
+  dplyr::group_by(month) %>%
+  dplyr::summarise(Qm_ia = mean(resultat_obs_elab)) # calcul des moyennes des débits mensuels regroupées par mois sur la période 1992-2022
 
 qm_D013 <- qm_D013 %>%
   mutate(month = as.integer(substr(date_obs_elab, 6, 7))) # création d'une colonne mois
@@ -1524,8 +1529,8 @@ load(file="processed_data/hydraulicity.RData")
 
 ```{r}
 hydraulicity %>% 
-  group_by(date_obs_elab) %>% 
-summarise(med_H=median(H)) %>% 
+  dplyr::group_by(date_obs_elab) %>% 
+dplyr::summarise(med_H=median(H)) %>% 
             ggplot(
   aes(x = date_obs_elab, y = med_H)
 ) +
@@ -1541,8 +1546,8 @@ L'évolution de l'hydraulicité sur la période 1992-2022 mets en évidence les 
 ```{r}
 hydraulicity %>% 
   filter(annee %in% c("2022", "2020", "2019", "2018","2017", "2011")) %>% 
-   group_by(month, annee) %>% 
-summarise(med_H=median(H)) %>% 
+   dplyr::group_by(month, annee) %>% 
+dplyr::summarise(med_H=median(H)) %>% 
   ggplot(aes(x=month, y=med_H, fill=annee))+
   geom_col(position='dodge', stat="identity")+
   scale_fill_brewer(palette="Set1")
@@ -1552,8 +1557,8 @@ summarise(med_H=median(H)) %>%
 ```{r}
 hydraulicity %>% 
   filter(annee %in% c("2022", "2020", "2019", "2018","2017","2011")) %>% 
-   group_by(month, annee) %>% 
-summarise(med_H=median(H)) %>% 
+   dplyr::group_by(month, annee) %>% 
+dplyr::summarise(med_H=median(H)) %>% 
   ggplot(aes(x=month, y=med_H, fill=annee))+
   geom_col(position='stack', stat="identity")+
   scale_fill_brewer(palette="Set1")
@@ -1563,7 +1568,7 @@ summarise(med_H=median(H)) %>%
 
 Les VCN10 seront calculés à partir des débits spécifiques de chaque station (débits réels divisées par la surface du bassin versant amont), afin de pouvoir comparer ces VCN10 et les agréger à l'échelle régionale. 
 
-```{r}
+```{r, eval=FALSE}
 # Calcul des débits spécifiques 
 
 q_E550<-q_E550 %>% 
@@ -1693,12 +1698,16 @@ VCN10_H760<-VCN10_H760 %>%
 
 ```
 
-```{r}
+```{r, eval=FALSE}
 save(VCN10_D013, VCN10_D020, VCN10_E172, VCN10_E176, VCN10_E182, VCN10_E236, VCN10_E334, VCN10_E35112,VCN10_E35185, 
      VCN10_E364, VCN10_E403, VCN10_E430, VCN10_E490, VCN10_E520, VCN10_E530, VCN10_E54003, VCN10_E5406, VCN10_E550,
      VCN10_E64060, VCN10_E642, VCN10_E647, VCN10_E649, VCN10_H552,
      VCN10_H702, VCN10_H705, VCN10_H714, VCN10_H730, VCN10_H740, VCN10_H742, VCN10_H751, VCN10_H760, VCN10_H774, 
      VCN10_H781, file="processed_data/VCN10_annuels.RData")
+```
+
+```{r}
+load(file="processed_data/VCN10_annuels.RData")
 ```
 
 Maintenant que l'on dispose de tous les VCN10 annuels par station, on peut les assembler au sein d'un même data frame pour pouvoir tracer les graphiques par la suite. 
@@ -1960,7 +1969,31 @@ Remarque : il est précisé dans le chunck ci-dessus que la fonction group_by do
 
 #### Calcul de la température maximale moyenne sur 7 jours consécutifs 
 
-#### Calcul des anomalies de température 
+Le calcul de cet indicateur se fait sur le même modèle que le calcule du VCN10 pour les débits, c'est à dire qu'une moyenne glissante est calculée (ici sur 7 jours) sur toute la période considérée, et le minimum annuel de cette moyenne glissante donne la valeur de l'indicateur. 
+
+La même fonction sera utilisée pour ce calcul que pour le calcul du VCN10. 
+
+```{r}
+temperatures$Date<-dmy(temperatures$Date) #conversion colonne date du data frame de températures en format date
+
+dates<-temperatures$Date #création d'un vecteur de dates
+
+dates<-sort(dates, decreasing = FALSE)
+
+Tmax_7jr<-
+  mean_run(temperatures$Tw_fusion,   # calcul d'une moyenne glissante des débits spécifiques sur k=10 jours 
+                       k = 7, 
+                       idx = dates
+                       )
+
+Tmax_7jr<-data.frame(Tmax_7jr, dates, annee=substr(dates, 1,4)) # création d'un data frame avec les moyennes glissantes, les dates et les années 
+
+Tmax_7jr<-Tmax_7jr %>% 
+  dplyr::group_by(annee) %>% 
+  dplyr::summarise(Tmax_7jr_annuel=max(Tmax_7jr)) # calcule du minimum par années des moyennes glissantes 
+
+```
+
 
 
 ### Représentation graphique de la température sur la période 2008-2018
@@ -1983,8 +2016,8 @@ temp_annee %>%
 
 ```{r}
 temp_annee %>% 
-  group_by(annee) %>% 
-  summarise(T_max=median(T_max)) %>% 
+  dplyr::group_by(annee) %>% 
+  dplyr::summarise(T_max=median(T_max)) %>% 
   ggplot(aes(x=annee, y=T_max, group=1))+
   geom_point(stat="summary")+stat_summary(geom="line")
 ```
@@ -2024,7 +2057,8 @@ ggplot(aes(x = annee, y= T_moy)) +
   geom_col(position='dodge', stat="identity")+
   scale_fill_brewer(palette="Paired")
 ```
-Remarque : les données de températures commencent en Aout 2008, il n'ya donc pas de barre pour 2008 pour les mois 1 à 7
+
+Remarque : les données de températures commencent en Aout 2008, il n'y a donc pas de barre pour 2008 pour les mois 1 à 7
 
 ```{r}
 #histogramme Tmax mensuelle par année 
@@ -2033,6 +2067,15 @@ max_temp_mois %>%
   ggplot(aes(x=month, y=T_max_mois, fill=annee))+
   geom_col(position='dodge', stat="identity")+
   scale_fill_brewer(palette="Paired")
+```
+
+
+#### Evolution de températures max sur 7 jours consécutifs annuels 
+
+```{r}
+Tmax_7jr %>% 
+  ggplot(aes(x=annee, y=Tmax_7jr_annuel))+
+  geom_col()
 ```
 
 ## Evolution des paramètres "poisson"
@@ -2045,7 +2088,7 @@ Les données piscioles pour la région Hdf ont déjà été extraites des bases 
 
 load(file="raw_data/IPR.RData")
 load(file="raw_data/tables_sauf_mei_2023_05_10_10_16_44.RData")
-load(file="raw_data/mesures_indiv.RData")
+load(file="raw_data/mei_hdf.RData")
 
 ```
 
@@ -2072,7 +2115,8 @@ On peut commencer par regarder le nombre de stations pêchées par an :
 
 ```{r}
 ipr %>% 
- ggplot(aes(x=annee))+geom_histogram(stat="count")
+ ggplot(aes(x=annee))+geom_histogram(stat="count")+
+  geom_text(aes(label = ..count..), stat = "count", vjust = 1.5, colour = "white")
 ```
 
 Le nombre de station est très variable selon les années. Le premier élement est que beaucoup de station font partie du réseau RCS, dont les pêches se font tous les deux ans. Ont peut distinguer les stations dont les prélèvement se font les années paires, et celles dont ils se font les années impaires. De plus, certaines stations ont été ouvertes pendant la période 2002-2022, modifiant là aussi les stations pêchées pour une année. 
@@ -2089,7 +2133,7 @@ ipr<-merge(ipr, station, by="sta_id") %>%
 
 ```{r} 
 
-# Nombre de stations des réseaux RHP et RCS pêchées en 2022 
+# Nombre de stations des réseaux RHP et RRP pêchées en 2022 
 
 ipr %>% 
   filter(annee==2022 & obj_libelle %in% c("RHP – Réseau Hydrobiologique Piscicole", 
@@ -2135,7 +2179,6 @@ Les seules stations disposant de données tous les ans sur la période 2010-2022
 -4830 (l'ourcq à ferre en tardenois)
 -209 (l'aa à verchocque)
 
-Pour les stations RRP et RHP ayant des données tous les deux ans sur la période 2010-2022 : 
 
 ```{r}
 
@@ -2145,6 +2188,7 @@ periode<-c("2010","2011","2012", "2013", "2014", "2015", "2016", "2017", "2018",
 periode2<-c("2010", "2012", "2014", "2016", "2018", "2020", "2022")
 ```
 
+Stations RRp ou RHP ayant de la données tous les deux ans sur la période 2010-2022: 
 
 ```{r}
 # graphique en histogramme stack de l'ipr par station en fonction de la période 2, qui permet de voir les stations ayant de la données par année 
@@ -2161,6 +2205,8 @@ ipr %>%
   
 ```
 9 stations RHP et RRP disposent de données tous les deux ans depuis 2010. Ce sont les stations 7, 154, 209,262, 4830, 5307, 5503, 5930, 5980. 
+
+#### Années paires 
 
 On peut effectuer la même démarche que ci-dessus pour identifier les stations RCS des années paires ayant des données entre 2010 et 2022. 
 
@@ -2218,14 +2264,14 @@ On se retrouve finalement avec 20 stations de pêches tous réseaux confondus qu
 ```{r}
 #création du vecteur des 20 stations avec données tous les deux ans entre 2010 et 2022 
 
-sta_peche<-c(sta_id_RCS,"209", "262", "4830", "5930")
+sta_peche_paire<-c(sta_id_RCS,"209", "262", "4830", "5930")
 ```
 
 On peut vérifier que ces stations ont le bon nombre de données, et voir si on ne peut pas étendre la période:
 
 ```{r}
 ipr %>% 
-  filter(sta_id %in% sta_peche & annee %in% c("2002", "2004", "2006", "2008", "2010", "2012", "2014", "2016", "2018", "2020", "2022")) %>%
+  filter(sta_id %in% sta_peche_paire & annee %in% c("2002", "2004", "2006", "2008", "2010", "2012", "2014", "2016", "2018", "2020", "2022")) %>%
   ggplot(aes(x=annee, y=ipr, fill=sta_id))+
   geom_col(position='stack', stat="identity")+
   theme(axis.text.x = element_text(angle = 90))+
@@ -2233,205 +2279,877 @@ ipr %>%
 ```
 On constate qu'en 2008 ces stations ont aussi de la donnée. On peut donc étendre la période au années paires entre 2008 et 2022, soit 8 années. 
 
-### Création de modèles linéaires  
-
-L'idée de cette partie est d'essayer de créer des modèles linéaires pour chacun des indicateurs "poisson" utilisé, du type Indicateur~(Facteur1 + Facteur 2 etc.), pour identifier les éventuels efets significatifs des dits facteurs sur les poissons. 
-
-On essayera dans cette partie de tester les facteurs Sécheresse (trois modalités : pas_secheresse, secheresse, post_secheresse) et éventuellement station (sta_id), afin de voir si on retrouve un effet significative des grande tendences de sécheresse sur les poissons ou si les particularités individuelles des stations ont le plus d'influence. Ce test pourra par exemple être fait via une ANOVA si les conditions de validité de l'ANOVA sont respectées. 
-
-#### Construction du data frame de travail 
+#### Années impaires 
 
 ```{r}
-# selection des stations et des années étudiées 
+
+periode3<-c( "2011", "2013", "2015", "2017", "2019", "2021")
+
+nb_sta_RCS<-ipr %>% 
+  filter( annee %in% periode3 & 
+            obj_libelle=="RCS – Réseau de Contrôle de Surveillance") %>%
+  dplyr::group_by(sta_id) %>% 
+  dplyr::summarise(nb_annee=n()) 
+
+sta_id_RCS<-nb_sta_RCS %>% 
+  filter(nb_annee>=6)
+
+sta_id_RCS<-as.vector(sta_id_RCS$sta_id)
+```
+
+Uniquement 7 stations RCS ont de la données tous les deux ans les années impaires entre 2010 et 2022. Ces stations sont 188, 267, 5253, 5443, 5690, 5930, 5953. 
+
+```{r}
+ipr %>% 
+  filter(sta_id %in% c("123", "154", "203", "209", "262",
+                       "4959", "278", "4830", "5307", "5503",
+                       "5314", "5930", "5980", "6168", "6434",
+                       "7") & annee %in% periode3) %>%
+  ggplot(aes(x=annee, y=ipr, fill=sta_id))+
+  geom_col(position='stack', stat="identity")+
+  theme(axis.text.x = element_text(angle = 90))+
+  scale_fill_manual(values=palette)
+  
+```
+7 stations RRP ou RHP ont de la données sur les années impaires entre 2010 et 2022. Ces stations sont 5980, 5930, 5503, 4830, 123, 209 et 7. 
+
+En tout il y a donc 13 stations tous reseaux confondus ayant de la donnée les années impaires entre 2010 et 2022 (en supprimant les doublons entre reseaux.)
+
+On peut essayer avec une autres méthode pour confirmer (cette fois-ci tous réseaux confondus): 
+
+```{r}
+
+sta_aspe_2011<-ipr %>% 
+  filter(annee==2011) %>% 
+  distinct(sta_id)
+
+sta_aspe_2013<-ipr %>% 
+  filter(annee==2013) %>% 
+  distinct(sta_id)
+
+sta_aspe_2015<-ipr %>% 
+  filter(annee==2015) %>% 
+  distinct(sta_id)
+
+sta_aspe_2017<-ipr %>% 
+  filter(annee==2017) %>% 
+  distinct(sta_id)
+
+sta_aspe_2019<-ipr %>% 
+  filter(annee==2019) %>% 
+  distinct(sta_id)
+
+sta_aspe_2021<-ipr %>% 
+  filter(annee==2021) %>% 
+  distinct(sta_id)
+
+sta_aspe_com_1921<-generics :: intersect ( sta_aspe_2019, sta_aspe_2021)
+
+sta_aspe_com_171921<-generics :: intersect ( sta_aspe_2017, sta_aspe_com_1921)
+
+sta_aspe_com_15171921<-generics :: intersect ( sta_aspe_2015, sta_aspe_com_171921)
+
+sta_aspe_com_1315171921<-generics :: intersect ( sta_aspe_2013, sta_aspe_com_15171921)
+
+sta_aspe_com_periode3<-generics :: intersect ( sta_aspe_2011, sta_aspe_com_1315171921)
+```
+
+44 stations en commun entre 2019 et 2021. 
+40 stations en commun entre 2017, 2019 et 2021. 
+19 stations en commun entre 2015, 2017, 2019 et 2021. 
+18 stations en commun entre 2013, 2017, 2019 et 2021. 
+13 stations en commun les années impaires entre 2010 et 2022. 
+
+```{r}
+#construction du vecteur des stations des années impaires 
+
+sta_peche_imp<-c("188", "267", "5253", "5443", "5690", "5953", "5980", "5930", "5503", "4830", "123", "7", "209")
+```
+
+
+### Evolution des IPR et ses métriques
+
+#### Années paires 
+
+Il est à noter que seule une année post-sécheresse est représentée par les années paires. Il n'est donc pas pertinent de créer un  niveau post-sécheresse pour le facteur sécheresse comme pour les macro-invertébrés. Il faut donc mettre l'année post-sécheresse en "sécheresse" ou "pas de sécheresse". Comme la littérature a montré que l'année suivant une sécheresse pouvait êtr fortement impactée par cette sécheresse, voire même plus que l'année sèche elle-même, il a été décidé de classer l'année post sécheresse en "sécheresse". 
+
+```{r}
+# selection des stations et des années paires  
 
 ipr_travail<-ipr %>% 
-  filter(sta_id %in% sta_peche, annee %in% c("2008",periode2))
+  filter(sta_id %in% sta_peche_paire, annee %in% c("2008",periode2))
 
 # création d'une colonne pour le facteur sécheresse 
 
-ipr_travail[ipr_travail$annee %in% c("2018", "2020", "2022") ,"secheresse"] <- "secheresse"
-ipr_travail[ipr_travail$annee=="2012", "secheresse"] <- "post_secheresse"
+ipr_travail[ipr_travail$annee %in% c("2012", "2018", "2020", "2022") ,"secheresse"] <- "secheresse"
 ipr_travail[ipr_travail$annee %in% c("2008", "2010", "2014", "2016") ,"secheresse"] <- "pas_secheresse"
  
-ipr_travail$secheresse<-ordered(ipr_travail$secheresse, levels=c("pas_secheresse", "secheresse", "post_secheresse"))
+ipr_travail$secheresse<-ordered(ipr_travail$secheresse, levels=c("pas_secheresse", "secheresse"))
 ```
 
-#### Modèle du nombre total d'espèces
+```{r}
+#Tendance de l'IPR 
+
+ipr_p<-ipr_travail %>% 
+ggplot(aes(x=annee, y=ipr, group=1, color=secheresse))+
+  geom_point()+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("IPR")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+
+ipr_p
+```
+```{r}
+#test de sheirer ray hare 
+
+scheirerRayHare(ipr~secheresse*annee, data=ipr_travail)
+
+```
+Rien n'est significatif. 
 
 
 ```{r}
-# ecriture du modèle 
+# IPR par station 
 
-library(lmtest)
+ipr_travail %>% 
+  ggplot(aes(x=annee, y=ipr, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+    theme(axis.text = element_text(size = 7))+
+  ylab("IPR")+
+  facet_wrap(~sta_id)
 
-mod_nte<-lm(data=ipr_travail, nte~secheresse) #modèle linéaire 
-plot(mod_nte)
-summary(mod_nte)
 
 ```
-
-Vérifions maintenant les conditions de validité du modèle qui sont :
-
--la normalité des résidus du modèle 
--l'homoscédasiticté des résidus du modèle 
 
 ```{r}
-# condition de normalité
+#ner tendance 
 
-res_nte<-residuals(mod_nte) #résidus du modèle 
-shapiro.test(res_nte) 
+ner_p<-ipr_travail %>% 
+ggplot(aes(x=annee, y=ner, group=1, color=secheresse))+
+  geom_point()+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("NER")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
 
+ner_p
 ```
-Les résidus du modèle ne sont pas normalement distribués. Ceci est confirmé par l'allure du QQ-plot. 
+
 
 ```{r}
-# homoscédasticité 
+#test de sheirer ray hare 
 
-bptest(mod_nte)
-
+scheirerRayHare(ner~secheresse*annee, data=ipr_travail)
 ```
+Rien de significatif. 
 
-L'homoscédasticité des résidus n'est pas respectée.Ceci est confirmé par le Scale-Location graphique. De plus, sur ce graphique, on peut voir un défaut d'indépendence des résidus, car plusieurs points semblent aller par groupes.    
-
-Les conditions de validité du modèle ne sont pas respectées, donc les résultats ne sont pas validés et le modèle ne peut pas être utilisé en l'état. 
-Il est possisble d'essayer de transformer la variable nte en appliquant par exemple une fonction log ou racine carrée. 
 
 ```{r}
-# transformation de la variable nte
+#ner par station 
 
-ipr_travail<-ipr_travail %>% 
-  mutate(log_nte=log(nte)) %>% 
-  mutate(sqrt_nte=sqrt(nte))
+ipr_travail %>% 
+  ggplot(aes(x=annee, y=ner, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("NER")+
+  facet_wrap(~sta_id)
+
+
 ```
-
-On peut réessayer de construire un modèle avec la variable transformée : 
 
 ```{r}
-mod_nte_log<-lm(data=ipr_travail, log_nte~secheresse) #modèle linéaire 
+# tendance nte 
 
-summary(mod_nte_log)
-plot(mod_nte_log)
+nte_p<-ipr_travail %>% 
+ggplot(aes(x=annee, y=nte, group=1, color=secheresse))+
+  geom_point()+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("NTE")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
 
-res_nte_log<-residuals(mod_nte_log)
-shapiro.test(res_nte_log)
-
-
-bptest(mod_nte_log)
-
+nte_p
 ```
-
-La condition de normalité n'est toujours pas respectée pour la transformation logarithmique, mais celle d'homoscédasticité l'est. (les modèles linéaires sont dits plutot robuste à la non normalité, est-ce que c'est possible, du coup, d'utiliser le modèle même avec des résidus non normaux ?)
 
 ```{r}
-mod_nte_sqrt<-lm(data=ipr_travail, sqrt_nte~secheresse) #modèle linéaire 
+#test de sheirer ray hare 
 
-summary(mod_nte_sqrt)
-plot(mod_nte_sqrt)
-
-res_nte_sqrt<-residuals(mod_nte_sqrt)
-shapiro.test(res_nte_sqrt)
-
-
-bptest(mod_nte_sqrt)
+scheirerRayHare(nte~secheresse*annee, data=ipr_travail)
 ```
-Comme pour la transformation log, la normalité n'est toujours pas respectée (mais les résidus semblent se rapprocher plus de la normalité que pour le log, avec une p-value du test de shapiro plus élevée et un qqplot un peu plus satisfaisant), mais l'homoscédasticité l'est. 
-
-##### Test de Kruskall Wallis 
-
-```{r}
-
-kruskal.test(nte~secheresse, data=ipr_travail)
-
-kruskal.test(nte~annee, data=ipr_travail)
-
-kruskal.test(nte~sta_id, data=ipr_travail)
-
-```
-Le test de Kruskal Wallis renvoie une p-value non significative : le facteur sécheresse n'a pas d'effet significatif sur le nombre total d'espèces. Le facteur annee non plus. En revanche, le facteur station a un effet significatif sur le nte, ce qui indique un impact fort (et logique) des particularités des stations (caractéristiques physico-chimique, morphologique etc.) sur le nombre d'espèces de poisson. 
-
-
-##### Distribution du nte (boxplot)
+Rien de significatif. 
 
 ```{r}
 ipr_travail %>% 
-  ggplot(aes(x=annee, y=nte, fill=secheresse))+geom_boxplot()+
-  scale_fill_manual(values=palette)+
+  ggplot(aes(x=annee, y=nte, fill=secheresse))+
+  geom_col()+
   scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
-                                'post_secheresse' = '#ffe119'))
-  
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("NTE")+
+  facet_wrap(~sta_id)
 ```
 
-IL n'y a aucune difference significative entre les années, malgré le fait que l'on puisse croire que les années 2012 et 2022 présentent un nte plus faible que les autres. Il semblerait que l'on puisse observer une tendence à la décroissance du nombre total d'espèces depuis 2018, mais rien ne permet de l'affirmer.   
 
 ```{r}
+#tendance dit 
+
+dit_p<-ipr_travail %>% 
+ggplot(aes(x=annee, y=dit, group=1, color=secheresse))+
+  geom_point()+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("DIT")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+
+dit_p
+```
+
+```{r}
+#test de scheirer ray hare 
+
+scheirerRayHare(dit~secheresse*annee, data=ipr_travail)
+```
+
+Rien de significatif. 
+
+```{r}
+ipr_travail %>% 
+  ggplot(aes(x=annee, y=dit, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("DIT")+
+  facet_wrap(~sta_id)
+```
+
+
+```{r}
+#tendance nel 
+
+nel_p<-ipr_travail %>% 
+ggplot(aes(x=annee, y=nel, group=1, color=secheresse))+
+  geom_point()+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("NEL")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+
+nel_p
+```
+
+
+```{r}
+#test de scheirer ray hare 
+
+scheirerRayHare(nel~secheresse*annee, data=ipr_travail)
+```
+Rien de significatif. 
+
+```{r}
+#nel à la station 
+ipr_travail %>% 
+  ggplot(aes(x=annee, y=nel, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("NEL")+
+  facet_wrap(~sta_id)
+
+```
+
+```{r}
+# tendances dio 
+
+dio_p<-ipr_travail %>% 
+ggplot(aes(x=annee, y=dio, group=1, color=secheresse))+
+  geom_point()+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("DIO")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+
+dio_p
+
+```
+
+
+```{r}
+#test de scheirer ray hare 
+
+scheirerRayHare(dio~secheresse*annee, data=ipr_travail)
+```
+Rien de significatif.
+
+```{r}
+
+# dio à la station 
 
 ipr_travail %>% 
-  ggplot(aes(x=secheresse, y=nte, fill=secheresse))+geom_boxplot()+
+  ggplot(aes(x=annee, y=dio, fill=secheresse))+
+  geom_col()+
   scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("DIO")+
+  facet_wrap(~sta_id)
+```
+
+```{r}
+#tendance dii 
+
+dii_p<-ipr_travail %>% 
+ggplot(aes(x=annee, y=dii, group=1, color=secheresse))+
+  geom_point()+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("DII")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
                                 'post_secheresse' = '#ffe119'))
+
+dii_p
+```
+
+```{r}
+#test de scheirer ray hare 
+
+scheirerRayHare(dii~secheresse*annee, data=ipr_travail)
+```
+
+Rien de significatif. 
+
+```{r}
+ipr_travail %>% 
+  ggplot(aes(x=annee, y=dii, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("DII")+
+  facet_wrap(~sta_id)
+```
+
+```{r}
+
+# tendence dti 
+
+dti_p<-ipr_travail %>% 
+ggplot(aes(x=annee, y=dti, group=1, color=secheresse))+
+  geom_point()+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("DTI")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+
+dti_p
+```
+
+
+```{r}
+scheirerRayHare(dti~secheresse*annee, data=ipr_travail)
+```
+
+Rien de significatif. 
+
+```{r}
+ipr_travail %>% 
+  ggplot(aes(x=annee, y=dti, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("DTI")+
+  facet_wrap(~sta_id)
+```
+
+Mettons tous les graphiques de tendance sur un même panneau : 
+
+```{r}
+# graphique panneau ipr et métriques 
+
+ggarrange(ipr_p, nte_p, ner_p, nel_p, dit_p, dii_p, dio_p, dti_p, common.legend = TRUE)
+```
+
+
+##### Années impaires 
+
+```{r}
+# selection des stations et des années impaires  
+
+ipr_travail_imp<-ipr %>% 
+  filter(sta_id %in% sta_peche_imp, annee %in% c(periode3))
+
+# création d'une colonne pour le facteur sécheresse 
+
+ipr_travail_imp[ipr_travail_imp$annee %in% c("2011", "2017", "2019", "2021") ,"secheresse"] <- "secheresse"
+ipr_travail_imp[ipr_travail_imp$annee %in% c("2013", "2015") ,"secheresse"] <- "pas_secheresse"
+ 
+ipr_travail_imp$secheresse<-ordered(ipr_travail_imp$secheresse, levels=c("pas_secheresse", "secheresse"))
+```
+
+
+```{r}
+#tendance ipr
+
+ipr_i<-ipr_travail_imp %>% 
+ggplot(aes(x=annee, y=ipr, group=1, color=secheresse))+
+  geom_point(size=0.7)+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("IPR")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+ipr_i
+```
+```{r}
+#test de scheirer 
+
+scheirerRayHare(ipr~secheresse*annee, data=ipr_travail_imp)
+```
+Rien de significatif. 
+
+```{r} 
+#  IPR à la station
+
+ipr_travail_imp %>% 
+  ggplot(aes(x=annee, y=ipr, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("IPR")+
+  facet_wrap(~sta_id)
+```
+
+```{r}
+#tendances ner 
+
+ner_i<-ipr_travail_imp %>% 
+ggplot(aes(x=annee, y=ner, group=1, color=secheresse))+
+  geom_point(size=0.7)+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("NER")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+ner_i
 
 ```
 
-Les distributions pour les groupes pas_secheresse, secheresse et post_secheresse ne sont pas significativement differentes. On observe toutefois une décroissance des médianes dans l'ordre pas_secheresse, secheresse, post_secheresse. De plus, il faut être prudent, car la modalité post_secheresse ne contient qu'une annee (2012), les autres annees post_secheresse étant des années impaires. De plus, certaines années sont à la fois des années de sécheresse et des années post-sécheresse, comme 2020. (ajouter une modalite post_et_sech ?)   
+```{r}
+#test de scheirer 
 
-##### Essai d'agrégation du nte au niveau régional 
+scheirerRayHare(ner~secheresse*annee, data =ipr_travail_imp)
+```
 
-L'idée de cette partie est d'essayer de voir s'il est possible d'agréger le nombre total d'espèces sur les 20 stations étudiées en dénombrant pour une année toutes les espèces différentes sur les 20 stations. 
+Rien de significatif. 
 
-Le data frame support sera celui des mesures individuelles, qui comporte le listing des espèces, et pas le data frame d'IPR et ses métriques. 
 
 ```{r}
-# Construction du data frame de travail 
+# ner
+
+ipr_travail_imp %>% 
+  ggplot(aes(x=annee, y=ner, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("NER")+
+  facet_wrap(~sta_id)
+```
+
+```{r}
+#tendences nel
+
+nel_i<-ipr_travail_imp %>% 
+ggplot(aes(x=annee, y=nel, group=1, color=secheresse))+
+  geom_point(size=0.7)+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("NEL")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+nel_i
+```
+
+```{r}
+#test de scheirer 
+
+scheirerRayHare(nel~secheresse*annee, data=ipr_travail_imp)
+```
+
+Rien de significatif. 
+
+```{r}
+# nel
+
+ipr_travail_imp %>% 
+  ggplot(aes(x=annee, y=nel, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("NEL")+
+  facet_wrap(~sta_id)
+```
+
+```{r}
+#tendances nte 
+nte_i<-ipr_travail_imp %>% 
+ggplot(aes(x=annee, y=nte, group=1, color=secheresse))+
+  geom_point(size=0.7)+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("NTE")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+nte_i
+```
+
+
+```{r}
+#test de scheirer 
+
+scheirerRayHare(nte~secheresse*annee, data=ipr_travail_imp)
+```
+
+Rien de significatif. 
+
+
+```{r}
+# nte 
+
+ipr_travail_imp %>% 
+  ggplot(aes(x=annee, y=nte, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("NTE")+
+  facet_wrap(~sta_id)
+```
+
+```{r}
+#tendances dit 
+
+dit_i<-ipr_travail_imp %>% 
+ggplot(aes(x=annee, y=dit, group=1, color=secheresse))+
+  geom_point(size=0.7)+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("DIT")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+dit_i
+```
+
+```{r}
+#test de scheirer 
+
+scheirerRayHare(dit~secheresse*annee, data=ipr_travail_imp)
+```
+
+RIen de significatif. 
+
+```{r}
+# dit
+
+ipr_travail_imp %>% 
+  ggplot(aes(x=annee, y=dit, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("DIT")+
+  facet_wrap(~sta_id)
+```
+
+
+```{r}
+#tendances dio
+
+dio_i<-ipr_travail_imp %>% 
+ggplot(aes(x=annee, y=dio, group=1, color=secheresse))+
+  geom_point(size=0.7)+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("DIO")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+dio_i
+```
+
+
+```{r}
+#test de shceirer 
+
+scheirerRayHare(dio~secheresse*annee, data= ipr_travail_imp)
+```
+
+
+Riend de significatif. 
+
+```{r}
+# dio 
+
+ipr_travail_imp %>% 
+  ggplot(aes(x=annee, y=dio, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("DIO")+
+  facet_wrap(~sta_id)
+```
+
+```{r}
+#tendances dii 
+
+dii_i<-ipr_travail_imp %>% 
+ggplot(aes(x=annee, y=dii, group=1, color=secheresse))+
+  geom_point(size=0.7)+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("DII")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+dii_i
+```
+
+
+```{r}
+#test de scheirer 
+
+scheirerRayHare(dii~secheresse*annee, data=ipr_travail_imp)
+```
+
+Rien de significatif. 
+
+```{r}
+# dii 
+
+ipr_travail_imp %>% 
+  ggplot(aes(x=annee, y=dii, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("DII")+
+  facet_wrap(~sta_id)
+```
+
+
+```{r}
+#tendances dti 
+
+dti_i<-ipr_travail_imp %>% 
+ggplot(aes(x=annee, y=dti, group=1, color=secheresse))+
+  geom_point(size=0.7)+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("DTI")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+dti_i
+```
+
+
+```{r}
+#test de scheirer 
+
+scheirerRayHare(dti~secheresse*annee, data=ipr_travail_imp)
+```
+Rien de significatif. 
+
+```{r}
+# dti 
+
+ipr_travail_imp %>% 
+  ggplot(aes(x=annee, y=dti, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("DTI")+
+  facet_wrap(~sta_id)
+```
+
+
+```{r}
+#panneau de graph pour ipr+métriques 
+
+ggarrange(ipr_i, nte_i, ner_i, nel_i, dit_i, dii_i, dio_i, dti_i, common.legend = TRUE)
+```
+
+### Evolution de la richesse spécifique 
+
+#### Années paires 
+
+```{r}
 
 mei_travail<-mei_hdf %>% 
-  filter(sta_id %in% sta_peche & annee %in% c("2008",periode2)) %>% 
+  filter(sta_id %in% sta_peche_paire & annee %in% c("2008",periode2)) %>% 
   select(sta_id, pop_libelle:annee, esp_code_alternatif, mei_taille)
 
 mei_travail$annee<-as.factor(mei_travail$annee)
+mei_travail$sta_id<-as.factor(mei_travail$sta_id)
 
-# Data frame contant par année le nombre d'individus par espèces sur les 20 stations 
 
-mei_nte<-mei_travail %>% 
-  dplyr::group_by(annee, esp_code_alternatif) %>% 
+# Data frame contant par année le nombre d'individus par espèces et par station
+
+mei_nb_indiv<-mei_travail %>% 
+  dplyr::group_by(annee, sta_id, esp_code_alternatif ) %>% 
   dplyr::summarise(nb_tot=n())
 
 
-mei_nte[mei_nte$annee %in% c("2018", "2020", "2022") ,"secheresse"] <- "secheresse"
-mei_nte[mei_nte$annee=="2012", "secheresse"] <- "post_secheresse"
-mei_nte[mei_nte$annee %in% c("2008", "2010", "2014", "2016") ,"secheresse"] <- "pas_secheresse"
+mei_nb_indiv[mei_nb_indiv$annee %in% c("2012","2018", "2020", "2022") ,"secheresse"] <- "secheresse"
+mei_nb_indiv[mei_nb_indiv$annee %in% c("2008", "2010", "2014", "2016") ,"secheresse"] <- "pas_secheresse"
 
-mei_nte$secheresse<-as.factor(mei_nte$secheresse)
-
+mei_nb_indiv$secheresse<-as.factor(mei_nb_indiv$secheresse)
 
 ```
 
-Le data frame mei_nte permet d'avoir accès à l'information nombre d'espèces par année et nombre d'individus par espèces par année sur l'ensemble des 20 stations. 
 
 ```{r}
-# evolution du nombre total d'espèces sur les 20 stations 
+#construction du data frame de la richesse spécifique par année et par station pour les années paires 
 
-mei_nte %>% 
-  ggplot(aes(x=annee, fill=secheresse))+geom_histogram(stat="count")+
-  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+mei_rich<-mei_nb_indiv %>% 
+  filter(sta_id %in% sta_peche_paire) %>% 
+  dplyr::group_by(annee, secheresse, sta_id) %>% 
+  dplyr::summarise(richesse=n())
+```
+ 
+```{r}
+#tendance de la richesse spécifique 
+
+mei_rich %>% 
+ggplot(aes(x=annee, y=richesse, group=1, color=secheresse))+
+  geom_point()+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("Richesse spécifique")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
                                 'post_secheresse' = '#ffe119'))
+```
+
+```{r}
+#test de scheirer 
+
+scheirerRayHare(richesse~secheresse*annee, data=mei_rich)
+```
+Rien de significatif. 
+
+On peut noter que l'évolution de la richesse spécifique (nombre d'espèces différentes) ne suit pas la même évolution que la métrique NTE. 
+
+
+```{r}
+# richesse spécifique par station   
+
+mei_rich %>% 
+  ggplot(aes(x=annee, y=richesse, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+    theme(axis.text = element_text(size = 7))+
+  ylab("Richesse spécifique")+
+  facet_wrap(~sta_id)
                     
 ```
-On ne peut pas observer grand chose sur le graphique ci-dessus. Il ne semble y avoir aucun lien entre les sécheresse et le nombre total d'espèces sur la région.  
+
+
+#### Années impaires 
 
 ```{r}
-# Bubble plot 
+mei_travail_imp<-mei_hdf %>% 
+  filter(sta_id %in% sta_peche_imp & annee %in% c(periode3)) %>% 
+  select(sta_id, pop_libelle:annee, esp_code_alternatif, mei_taille)
 
-mei_nte %>% 
-  ggplot(aes(x = annee, y = esp_code_alternatif)) + 
-  geom_point(aes(size = nb_tot, fill = secheresse), alpha = 0.75, shape = 21)+
-  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
-                                'post_secheresse' = '#ffe119'))
-  
+mei_travail_imp$annee<-as.factor(mei_travail_imp$annee)
+mei_travail_imp$sta_id<-as.factor(mei_travail_imp$sta_id)
+
+# Data frame contant par année le nombre d'individus par espèces et par station
+
+mei_nb_indiv_imp<-mei_travail_imp %>% 
+  dplyr::group_by(annee, sta_id, esp_code_alternatif ) %>% 
+  dplyr::summarise(nb_tot=n())
+
+
+mei_nb_indiv_imp[mei_nb_indiv_imp$annee %in% c("2011", "2017", "2019", "2021") ,"secheresse"] <- "secheresse"
+mei_nb_indiv_imp[mei_nb_indiv_imp$annee %in% c("2013", "2015") ,"secheresse"] <- "pas_secheresse"
+
+mei_nb_indiv_imp$secheresse<-as.factor(mei_nb_indiv_imp$secheresse)
+
 ```
 
-##### Analyse à la station 
 
-###### Calcul des effectifs par espèce et par année  
+```{r}
+#construction du data frame de la richesse spécifique par année et par station pour les années paires 
+
+mei_rich_imp<-mei_nb_indiv_imp %>% 
+  filter(sta_id %in% sta_peche_imp) %>% 
+  dplyr::group_by(annee, secheresse, sta_id) %>% 
+  dplyr::summarise(richesse=n())
+```
+
+
+```{r}
+
+mei_rich_imp %>% 
+ggplot(aes(x=annee, y=richesse, group=1, color=secheresse))+
+  geom_point()+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("Richesse spécifique")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+```
+
+```{r}
+#test de scheirer 
+
+scheirerRayHare(richesse~secheresse*annee, data=mei_rich_imp)
+```
+
+Rien de significatif. 
+
+
+### Composition des communautés 
+
+L'idée est de voir, avec une vision graphique, si  la composition de la communauté de poissons change en fonction des années et de la modalité de sécheresse. L'idée n'est pas (sauf gros changement identifié) de faire des test statistiques. C'est pour cela que la modalité post_secheresse peut être conservée à  la fois pour les années paires et impaires même si une seule année la représente. 
+
+#### Années paires 
+
+##### Calcul des effectifs relatifs par espèce et par année  
 
 ```{r} 
 
@@ -2443,9 +3161,11 @@ mei_nte_sta<-mei_travail %>%
   dplyr::summarise(nb_tot=n()) 
 
 # ajout de la colonne de moldaité de sécheresse 
+
 mei_nte_sta[mei_nte_sta$annee %in% c("2018", "2020", "2022") ,"secheresse"] <- "secheresse" 
 mei_nte_sta[mei_nte_sta$annee=="2012", "secheresse"] <- "post_secheresse"
 mei_nte_sta[mei_nte_sta$annee %in% c("2008", "2010", "2014", "2016") ,"secheresse"] <- "pas_secheresse"
+
 
 #conversion de la colonne de sécheresse en facteur 
 mei_nte_sta$secheresse<-as.factor(mei_nte_sta$secheresse)
@@ -2473,7 +3193,7 @@ mei_nte_sta<- mei_nte_sta %>%
   mutate(effectif=(nb_tot/nb_tot_peche)*100)
 ```
 
-Une colonne effectif a été rajoutée qui donne en pourcentage l'effectif de l'espèce pour une station et une année données. 
+Une colonne effectif (effectif relatif) a été rajoutée qui donne en pourcentage l'effectif relatif (nombre d'individus de l'espèce capturés sur le nombre total d'individus capturés) de l'espèce pour une station et une année données. 
 
 ```{r}
 #sauvegarde en RData du tableau des effectifs par station 
@@ -2481,12 +3201,58 @@ Une colonne effectif a été rajoutée qui donne en pourcentage l'effectif de l'
 save(mei_nte_sta, file="processed_data/effectifs_especes_stations.RData")
 ```
 
+On peut réaliser les mêmes manipulations pour avoir les effectifs relatifs des espèces sur l'ensemble des 20 stations pour chaque année. 
 
-###### Représentation graphique en bubble plot de l'évolution des effectifs par station 
+```{r}
+#nombre total d'individus par espèces et par année 
+
+mei_nti_esp<-mei_nte_sta %>% 
+  dplyr::group_by(annee, secheresse, esp_code_alternatif) %>% 
+  dplyr::summarise(nb_indiv=sum(nb_tot))
+```
+
+```{r}
+#nombre d'individus capturés chaque année 
+
+tot_peche_reg<-mei_travail %>% 
+  dplyr::group_by(annee) %>% 
+  dplyr::summarise(nb_tot_peche=n())
+```
+
+```{r}
+
+#ajout de la colonne du nombre total d'individus capturés par année 
+
+mei_nti_esp<-merge(tot_peche_reg,mei_nti_esp, by="annee")
+```
+
+```{r}
+# Calcule des effectifs par espèces par années 
+
+mei_nti_esp<- mei_nti_esp %>% 
+  mutate(effectif_relatif=(nb_indiv/nb_tot_peche)*100)
+```
+
+
+```{r}
+#représentation en bubble plot de la cooomunuaté sur les 20 stations 
+
+mei_nti_esp %>% 
+  ggplot(aes(x = annee, y = esp_code_alternatif)) + 
+  geom_point(aes(size = effectif_relatif, fill = secheresse),alpha=0.65, shape = 21)+ # création de point de taille selon effectif
+  scale_size(range = c(1, 5), breaks = c(1,20,40,60))+ # ajustement de la légende (taille de cercle, valeurs indiquées)
+  theme(axis.text.x = element_text(angle = 90))+ 
+  theme(axis.text.y = element_text(size = 5)) +
+  ylab("Espèces")+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+```
+
+##### Représentation graphique en bubble plot de l'évolution des effectifs par station 
 
 ```{r}
 mei_nte_sta %>% 
-  filter(sta_id %in% c("7", "48", "92", "109", "137","149")) %>% # choix des stations à affichier (ici 6 sur 20 pour une question de lisibilité)
+  filter(sta_id=="7") %>%  #%in% c("7", "48", "92", "109", "137","149")) %>% # choix des stations à affichier (ici 6 sur 20 pour une question de lisibilité)
   ggplot(aes(x = annee, y = esp_code_alternatif)) + 
   geom_point(aes(size = effectif, fill = secheresse),alpha=0.65, shape = 21)+ # création de point de taille selon effectif
   scale_size(range = c(1, 5), breaks = c(1,20,40,60))+ # ajustement de la légende (taille de cercle, valeurs indiquées)
@@ -2502,18 +3268,1611 @@ mei_nte_sta %>%
 On peut ajouter à ces graphiques en bulles la courbe de la richesse spécifique (nombre d'espèces) par année et par station. 
 
 ```{r}
+mei_nte_sta %>% 
+  dplyr::group_by(sta_id, annee, secheresse) %>% 
+  dplyr::summarise(richesse=n()) %>% 
+  filter(sta_id %in% c("7", "48", "92", "109", "137","149")) %>% 
+  ggplot(aes(x=annee, y=richesse, group=1, color=secheresse))+
+  geom_point()+
+  geom_line(stat="identity")+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  facet_wrap(~sta_id, scale='free')
+  
+```
+
+```{r}
+mei_nte_sta %>% 
+  filter(sta_id %in% c("154", "169", "209", "262", "4830","5307")) %>% # choix des stations à affichier (ici 6 sur 20 pour une question de lisibilité)
+  ggplot(aes(x = annee, y = esp_code_alternatif)) + 
+  geom_point(aes(size = effectif, fill = secheresse),alpha=0.65, shape = 21)+ # création de point de taille selon effectif
+  scale_size(range = c(1, 5), breaks = c(1,20,40,60))+ # ajustement de la légende (taille de cercle, valeurs indiquées)
+  theme(axis.text.x = element_text(angle = 90))+ 
+  theme(axis.text.y = element_text(size = 5)) +
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  facet_wrap(~sta_id, scale='free') # plot des résultats selon la station (un panneau par station) sur le même graph 
+
+```
+```{r}
+mei_nte_sta %>% 
+  dplyr::group_by(sta_id, annee, secheresse) %>% 
+  dplyr::summarise(richesse=n()) %>% 
+  filter(sta_id %in% c("154", "169", "209", "262", "4830","5307")) %>% 
+  ggplot(aes(x=annee, y=richesse, group=1, color=secheresse))+
+  geom_point()+
+  geom_line(stat="identity")+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  facet_wrap(~sta_id, scale='free')
+```
+
+```{r}
+mei_nte_sta %>% 
+  filter(sta_id %in% c("5355", "5503", "5534", "5722", "5930","5980")) %>% # choix des stations à affichier (ici 6 sur 20 pour une question de lisibilité)
+  ggplot(aes(x = annee, y = esp_code_alternatif)) + 
+  geom_point(aes(size = effectif, fill = secheresse),alpha=0.65, shape = 21)+ # création de point de taille selon effectif
+  scale_size(range = c(1, 5), breaks = c(1,20,40,60))+ # ajustement de la légende (taille de cercle, valeurs indiquées)
+  theme(axis.text.x = element_text(angle = 90))+ 
+  theme(axis.text.y = element_text(size = 5)) +
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  facet_wrap(~sta_id, scale='free') 
+```
+
+```{r}
+mei_nte_sta %>% 
+  dplyr::group_by(sta_id, annee, secheresse) %>% 
+  dplyr::summarise(richesse=n()) %>% 
+  filter(sta_id %in% c("5355", "5503", "5534", "5722", "5930","5980")) %>% 
+  ggplot(aes(x=annee, y=richesse, group=1, color=secheresse))+
+  geom_point()+
+  geom_line(stat="identity")+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  facet_wrap(~sta_id, scale='free')
+```
+
+```{r}
+eff_61<-mei_nte_sta %>% 
+  filter(sta_id %in% c("6134", "6189")) %>% # choix des stations à affichier (ici 6 sur 20 pour une question de lisibilité)
+  ggplot(aes(x = annee, y = esp_code_alternatif)) + 
+  geom_point(aes(size = effectif, fill = secheresse),alpha=0.65, shape = 21)+ # création de point de taille selon effectif
+  scale_size(range = c(1, 5), breaks = c(1,20,40,60))+ # ajustement de la légende (taille de cercle, valeurs indiquées)
+  theme(axis.text.x = element_text(angle = 90))+ 
+  theme(axis.text.y = element_text(size = 5)) +
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  facet_wrap(~sta_id, scale='free') 
+
+rich_61<-mei_nte_sta %>% 
+  dplyr::group_by(sta_id, annee, secheresse) %>% 
+  dplyr::summarise(richesse=n()) %>% 
+  filter(sta_id %in% c("6134", "6189")) %>% 
+  ggplot(aes(x=annee, y=richesse, group=1, color=secheresse))+
+  geom_point()+
+  geom_line(stat="identity")+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  facet_wrap(~sta_id, scale='free')
+
+ggarrange(eff_61, rich_61, ncol=1, nrow=2, common.legend=TRUE)
+
+```
+
+
+Essai de graphique sur la richesse spécifique par station sur la période 2010-2022 sur le même graphique : 
+
+```{r}
+richesse_spe_paire<-mei_nte_sta %>% 
+  dplyr::group_by(sta_id, annee, secheresse) %>% 
+  dplyr::summarise(richesse=n())
+```
+
+```{r}
+
+richesse_spe_paire$annee<-as.numeric(richesse_spe_paire$annee)
+
+richesse_spe_paire %>% 
+  ggplot(aes(x=annee, y=richesse, color=sta_id))+
+  geom_point()+
+  geom_line()+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  scale_color_manual(values = palette)
+```
+
+
+
+#### Années impaires 
+
+```{r}
+# Construction du data frame 
+
+#calcule du nombre d'individus par espèce pour une station et une années données 
+mei_nte_sta_imp<-mei_travail_imp %>% 
+  dplyr::group_by(sta_id,annee, esp_code_alternatif) %>% 
+  dplyr::summarise(nb_tot=n()) 
+
+# ajout de la colonne de moldaité de sécheresse 
+
+mei_nte_sta_imp[mei_nte_sta_imp$annee %in% c("2011", "2017", "2019") ,"secheresse"] <- "secheresse" 
+mei_nte_sta_imp[mei_nte_sta_imp$annee=="2021", "secheresse"] <- "post_secheresse"
+mei_nte_sta_imp[mei_nte_sta_imp$annee %in% c("2013", "2015") ,"secheresse"] <- "pas_secheresse"
+
+#conversion de la colonne de sécheresse en facteur 
+mei_nte_sta_imp$secheresse<-as.factor(mei_nte_sta_imp$secheresse)
+
+
+# Calcule du nombre total d'individus capturé par années et par station 
+
+# calcule du nombre total d'individus capturé pour chaque pêche (une station et une année)
+tot_peche_imp<-mei_travail_imp %>% 
+  dplyr::group_by(sta_id, annee) %>% 
+  dplyr::summarise(nb_tot_peche=n())
+
+#ajout par jointure d'une colonne du nombre total d'individus par pêche au data frame du nombre d'individus par espèces 
+mei_nte_sta_imp<-merge(tot_peche_imp,mei_nte_sta_imp, by=c("sta_id","annee"))
+
+```
+
+```{r}
+# Calcule des effectifs par espèces par années par station 
+
+mei_nte_sta_imp<- mei_nte_sta_imp %>% 
+  mutate(effectif=(nb_tot/nb_tot_peche)*100)
+```
+
+
+```{r}
+#sauvegarde en RData du tableau des effectifs par station 
+
+save(mei_nte_sta_imp, file="processed_data/effectifs_especes_stations_imp.RData")
+```
+
+On peu réaliser la même manipulation pour la communauté sur l'ensemble des stations : 
+
+
+```{r}
+#nombre total d'individus par espèces et par année 
+
+mei_nti_esp_imp<-mei_nte_sta_imp %>% 
+  dplyr::group_by(annee, secheresse, esp_code_alternatif) %>% 
+  dplyr::summarise(nb_indiv=sum(nb_tot))
+```
+
+```{r}
+#nombre d'individus capturés chaque année 
+
+tot_peche_reg_imp<-mei_travail_imp %>% 
+  dplyr::group_by(annee) %>% 
+  dplyr::summarise(nb_tot_peche=n())
+```
+
+```{r}
+
+#ajout de la colonne du nombre total d'individus capturés par année 
+
+mei_nti_esp_imp<-merge(tot_peche_reg_imp,mei_nti_esp_imp, by="annee")
+```
+
+```{r}
+# Calcule des effectifs par espèces par années 
+
+mei_nti_esp_imp<- mei_nti_esp_imp %>% 
+  mutate(effectif_relatif=(nb_indiv/nb_tot_peche)*100)
+```
+
+
+```{r}
+#représentation en bubble plot de la cooomunuaté sur les 20 stations 
+
+mei_nti_esp_imp %>% 
+  ggplot(aes(x = annee, y = esp_code_alternatif)) + 
+  geom_point(aes(size = effectif_relatif, fill = secheresse),alpha=0.65, shape = 21)+ # création de point de taille selon effectif
+  scale_size(range = c(1, 5), breaks = c(1,10,20))+ # ajustement de la légende (taille de cercle, valeurs indiquées)
+  theme(axis.text.x = element_text(angle = 90))+ 
+  theme(axis.text.y = element_text(size = 5)) +
+  ylab("Espèces")+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+```
+
+
+##### Représentation bubble plot par station 
+
+```{r}
+mei_nte_sta_imp %>% 
+  filter(sta_id %in% c("7", "123", "188", "209", "267","4830")) %>% # choix des stations à affichier (ici 5 sur 13 pour une question de lisibilité)
+  ggplot(aes(x = annee, y = esp_code_alternatif)) + 
+  geom_point(aes(size = effectif, fill = secheresse),alpha=0.65, shape = 21)+ # création de point de taille selon effectif
+  scale_size(range = c(1, 5), breaks = c(1,20,40,60))+ # ajustement de la légende (taille de cercle, valeurs indiquées)
+  theme(axis.text.x = element_text(angle = 90))+ 
+  theme(axis.text.y = element_text(size = 5)) +
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  facet_wrap(~sta_id, scale='free')
+```
+
+```{r}
+mei_nte_sta_imp %>% 
+  filter(sta_id %in% c("5443", "5690","5503", "5930", "5953", "5253")) %>% # choix des stations à affichier (ici 5 sur 13 pour une question de lisibilité)
+  ggplot(aes(x = annee, y = esp_code_alternatif)) + 
+  geom_point(aes(size = effectif, fill = secheresse),alpha=0.65, shape = 21)+ # création de point de taille selon effectif
+  scale_size(range = c(1, 5), breaks = c(1,20,40,60))+ # ajustement de la légende (taille de cercle, valeurs indiquées)
+  theme(axis.text.x = element_text(angle = 90))+ 
+  theme(axis.text.y = element_text(size = 5)) +
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  facet_wrap(~sta_id, scale='free')
+```
+
+
+```{r}
+mei_nte_sta_imp %>% 
+  filter(sta_id=="5980") %>% # choix des stations à affichier (ici 5 sur 13 pour une question de lisibilité)
+  ggplot(aes(x = annee, y = esp_code_alternatif)) + 
+  geom_point(aes(size = effectif, fill = secheresse),alpha=0.65, shape = 21)+ # création de point de taille selon effectif
+  scale_size(range = c(1, 5), breaks = c(1,20,40,60))+ # ajustement de la légende (taille de cercle, valeurs indiquées)
+  theme(axis.text.x = element_text(angle = 90))+ 
+  theme(axis.text.y = element_text(size = 5)) +
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  facet_wrap(~sta_id, scale='free')
+```
+
+### Evolution des tailles de poissons 
+
+Le but est de tester si le facteur sécheresse a une influence sur la taille (en mm) des individus. Comme celle-ci dépend énormément de l'espèce considérée, il serait bien de pouvoir étudier un modèle linéaire mixte, avec l'espèce en facteur aléatoire. 
+
+Comme nous effectuons des tests statistiques avec le facteur secheresse, les années post-sécheresse sont considérées commme faisant partie de la modalité sécheresse. 
+
+Quelques espèces cibles seront aussi étudiées, à la fois des espèces d'eau chaude, intermédiare et des espèces d'eau froide, qui sont présentes tous les ans dans la région. 
+
+Ces espèces sont : 
+
+-CHA (eau froide) -> espèce en général la plus abondante 
+-ROT(eau chaude)
+-TRF (eau froide)
+-TAC (eau froide)
+-VAN (intermédiaire, optimum max 25°C)
+-PER (supporte bien les gros écart de température)
+-BRO (?)
+
+
+#### Années paires 
+
+```{r}
+mei_travail[mei_travail$annee %in% c("2012", "2018", "2020", "2022") ,"secheresse"] <- "secheresse" 
+mei_travail[mei_travail$annee %in% c("2008", "2010", "2014", "2016") ,"secheresse"] <- "pas_secheresse"
+
+mei_travail$secheresse<-as.factor(mei_travail$secheresse)
+mei_travail$esp_code_alternatif<-as.factor(mei_travail$esp_code_alternatif)
+mei_travail$mei_taille<-as.numeric(mei_travail$mei_taille)
+```
+
+
+```{r}
+# construction d'un modèle mixte linéaire 
+
+MLM_taille<-lme4::lmer(mei_taille~secheresse+(1|esp_code_alternatif)+(1|sta_id), data=mei_travail)
+
+summary(MLM_taille)
+
+```
+```{r}
+plot(MLM_taille)
+```
+
+```{r}
+plot(resid(MLM_taille),mei_travail$mei_taille)
+```
+
+```{r}
+qqmath(MLM_taille)
+```
+
+Les hypothèses de validité du modèle ne sont pas respectées.
+
+
+```{r}
+scheirerRayHare(mei_taille~secheresse+esp_code_alternatif, data=mei_travail)
+```
+
+
+```{r}
+comparison<-with(mei_travail,kruskal(mei_taille,secheresse, group=TRUE, p.adj = "bon"))
+comparison
+```
+
+
+```{r}
+kruskal.test(mei_taille~secheresse, data=mei_travail)
+```
+
+Les tests indiquent un effet significatif de la modalité de sécheresse sur la taille des poissons, avec une médiane du groupe sécheresse plus faible que celle du groupe pas_secheresse. Cela parait quand même étrange vu les distributions quasi indentiques, mais c'est un résultat, probablement à critiquer. 
+
+```{r}
+mei_travail %>% 
+  ggplot(aes(x=secheresse, y=mei_taille, fill=secheresse))+
+  geom_boxplot(outlier.shape=NA)+
+  ylab("Taille (en mm)")+
+  ylim(0,500)+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+```
+
+```{r}
+mei_travail%>% 
+  dplyr::group_by(annee, secheresse, sta_id) %>% 
+  dplyr::summarise(med_taille=median(mei_taille)) %>% 
+ggplot(aes(x=annee, y=med_taille, fill=secheresse))+
+  geom_col()+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("Taille (en mm)")+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  facet_wrap(~sta_id)
+```
+
+
+##### Chabot (CHA)
+
+```{r}
+#data frame contant uniquement les mesures de tailles des Chabots 
+
+taille_CHA<-mei_travail %>% 
+  filter(esp_code_alternatif=="CHA")
+
+```
+
+```{r, eval=FALSE}
+# construction d'un modèle linéaire mixte 
+
+MLM_CHA<-lmer(mei_taille~secheresse+(1|sta_id), data=taille_CHA)
+
+summary(MLM_CHA)
+
+```
+
+```{r}
+qqmath(MLM_CHA)
+
+```
+ Les hypothèses de validité ne sont respectées. 
+
+```{r}
+#test de Kruskal Wallis
+
+kruskal.test(mei_taille~secheresse, data=taille_CHA)
+
+kruskal.test(mei_taille~annee, data=taille_CHA)
+```
+
+La p-value est très significative, ce qui voudrait dire que la modalité de sécheresse a une influence très significative sur la taille des chabots (idem pour l'année). Mais ça parait très bizarre ...
+
+```{r}
+
+#comparaison par paires de dunn
+
+library(FSA)
+dunnTest(mei_taille~secheresse, data=taille_CHA)
+
+```
+
+Les trois comparaisons sont significatives (très significatives ...), ce qui voudrait dire que les tailles des chabots sont significativement différentes selon les modalités des sécheresse. Mais ça n'a aucun sens au vu des graphiques ci dessous...
+
+```{r}
+# distribution des tailles de chabot par année
+
+taille_CHA %>% 
+  ggplot(aes(x=annee, y=mei_taille, fill=secheresse))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  ggtitle("Chabot")
+
+  
+```
+Il ne semble pas y avoir de tendence... pourquoi le test de Kruskal Wallis affiche une p-value aussi significative ??
+
+```{r}
+#distribution des tailles de chabot par modalité de sécheresse 
+
+taille_CHA %>% 
+  ggplot(aes(x=secheresse, y=mei_taille, fill=secheresse))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  ggtitle("Chabot")
+```
+Les distributions sont quasi égales, pourquoi Kruskal Walli et Dunn sont significatifs ????? Ca n'a aucun sens.
+
+Peut-être qu'en essayant à la station les résultats seront plus cohérents : 
+
+```{r}
+#essai sur la station 7
+
+CHA_7<-taille_CHA %>% 
+  filter(sta_id=="7")
+
+kruskal.test(data=CHA_7, mei_taille~secheresse)
+
+kruskal.test(data=CHA_7, mei_taille~annee)
+
+```
+Le test est aussi significatif.
+
+```{r}
+CHA_7 %>% 
+  ggplot(aes(x=secheresse, y=mei_taille, fill=secheresse))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  ggtitle("Chabot")
+```
+```{r}
+taille_CHA %>% 
+  ggplot(aes(x=annee, y=mei_taille, fill=secheresse))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  facet_wrap(~sta_id)
+```
+Peut-être que les tests donnent des résultats abhérents parce que les obervations ne sont pas indépendentes : la taille de poissons de l'année n dépend de celle de l'année n-1. 
+
+##### Rotengle 
+
+```{r}
+taille_ROT<-mei_travail %>% 
+  filter(esp_code_alternatif=="ROT")
+
+taille_ROT %>% 
+  ggplot(aes(x=annee, y=mei_taille, fill=secheresse))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  facet_wrap(~sta_id)
+```
+##### Truite de rivière 
+
+```{r}
+taille_TRF<-mei_travail %>% 
+  filter(esp_code_alternatif=="TRF")
+
+taille_TRF %>% 
+  ggplot(aes(x=annee, y=mei_taille, fill=secheresse))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  facet_wrap(~sta_id)
+```
+
+##### Truite arc en ciel 
+
+```{r}
+taille_TAC<-mei_travail %>% 
+  filter(esp_code_alternatif=="TAC")
+
+taille_TAC %>% 
+  ggplot(aes(x=annee, y=mei_taille, fill=secheresse))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  facet_wrap(~sta_id)
+```
+##### Vandoise 
+
+```{r}
+taille_VAN<-mei_travail %>% 
+  filter(esp_code_alternatif=="VAN")
+
+taille_VAN %>% 
+  ggplot(aes(x=annee, y=mei_taille, fill=secheresse))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  facet_wrap(~sta_id)
+```
+#### Perche 
+
+```{r}
+taille_PER<-mei_travail %>% 
+  filter(esp_code_alternatif=="PER")
+
+taille_PER %>% 
+  ggplot(aes(x=annee, y=mei_taille, fill=secheresse))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  facet_wrap(~sta_id)
+```
+
+
+#### Brochet 
+
+```{r}
+taille_BRO<-mei_travail %>% 
+  filter(esp_code_alternatif=="BRO")
+
+taille_BRO %>% 
+  ggplot(aes(x=annee, y=mei_taille, fill=secheresse))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  facet_wrap(~sta_id)
+```
+
+
+### Années impaires 
+
+```{r}
+mei_travail_imp[mei_travail_imp$annee %in% c("2011", "2017", "2019", "2021") ,"secheresse"] <- "secheresse" 
+mei_travail_imp[mei_travail_imp$annee %in% c("2013", "2015") ,"secheresse"] <- "pas_secheresse"
+
+mei_travail_imp$secheresse<-as.factor(mei_travail_imp$secheresse)
+mei_travail_imp$esp_code_alternatif<-as.factor(mei_travail_imp$esp_code_alternatif)
+mei_travail_imp$mei_taille<-as.numeric(mei_travail_imp$mei_taille)
+
+```
+
+
+```{r}
+scheirerRayHare(mei_taille~secheresse*annee, data=mei_travail_imp)
+```
+Effet de l'année mais pas des autres. 
+
+```{r}
+comparison<-with(mei_travail_imp, kruskal(mei_taille,annee, group=TRUE, p.adj = "bon"))
+comparison
+```
+
+## Evolution des paramètres macro-invertébrés 
+
+## Chargement des data frame de taxons et d'I2M2/métriques 
+
+```{r}
+load(file="raw_data/i2m2_hdf.RData")
+i2m2_hdf$code_station_hydrobio<-as.character(i2m2_hdf$code_station_hydrobio)
+
+load(file="raw_data/taxons_macro_hdf.RData")
+
+taxons_macro_hdf<-taxons_macro_hdf %>% 
+  mutate(annee=substr(date_prelevement,1,4))
+taxons_macro_hdf$annee<-as.factor(taxons_macro_hdf$annee)
+
+taxons_macro_hdf[taxons_macro_hdf$annee %in% c("2011","2017", "2018", "2019", "2020", "2022") ,"secheresse"] <- "secheresse"
+taxons_macro_hdf[taxons_macro_hdf$annee %in% c("2012", "2021"), "secheresse"] <- "post_secheresse"
+taxons_macro_hdf[taxons_macro_hdf$annee %in% c( "2010", "2013","2014","2015", "2016") ,"secheresse"] <- "pas_secheresse"
+
+```
+
+
+### Identification des stations utilisables pour l'I2M2 
+
+Les résultats d'I2M2 ne sont disponibles que depuis 2013 (à la fois depuis l'API hydrométrie et sur Naïades), puisque cet indice n'a été créé officiellement que depuis 2014 (d'après Eaufrance). L'indicateurs macro-invertébrés utilisé auparavant était l'indicateur IBG-DCE. De plus, il n'a encore aucune données d'I2M2 pour l'année 2022. 
+
+L'utilisation d'un nouvel indice empêche l'étude d'une longue chronique, puisque les années ne sont pas comparables si l'indice utilisé n'est pas le même. De plus, les années les plus intéressantes pour une étude sécheresse sont les dernières années depuis 2017 (évènements de sécheresse réccurents), ce qui impose l'utilisation de l'I2M2 comme indice (celui utilisé ces années-là). 
+
+Toutefois, il est possible, à partir des listes faunistiques de recalculer l'indicateur I2M2 via le SEEE. 
+
+```{r}
+#nombre d'i2m2 par an 
+
+i2m2_hdf %>% 
+  filter(code_indice=="7613") %>% 
+ ggplot(aes(x=annee))+geom_bar() +
+  geom_text(aes(label = ..count..), stat = "count", vjust = 1.5, colour = "white")
+```
+
+On constate qu'on retrouve quasiment le même nombre de données d'i2m2 les années 2018 et 2020 et 2019 et 2021. On peut donc supposer que les stations des années paires sont les mêmes depuis 2018 et pareillement pour les années impaires. On peut le vérifier : 
+
+```{r}
+sta_hrb_2018<-i2m2_hdf %>% 
+filter(annee==2018 & code_indice=="7613") %>% 
+distinct(code_station_hydrobio)
+
+sta_hrb_2020<-i2m2_hdf %>% 
+filter(annee==2020 & code_indice=="7613") %>% 
+distinct(code_station_hydrobio)
+
+sta_hrb_2019<-i2m2_hdf %>% 
+filter(annee==2019 & code_indice=="7613") %>% 
+distinct(code_station_hydrobio)
+
+sta_hrb_2021<-i2m2_hdf %>% 
+filter(annee==2021 & code_indice=="7613") %>% 
+distinct(code_station_hydrobio)
+
+sta_hrb_2017<-i2m2_hdf %>% 
+filter(annee==2017 & code_indice=="7613") %>% 
+distinct(code_station_hydrobio)
+
+sta_hrb_2016<-i2m2_hdf %>% 
+filter(annee==2016 & code_indice=="7613") %>% 
+distinct(code_station_hydrobio)
+
+sta_hrb_2015<-i2m2_hdf %>% 
+filter(annee==2015 & code_indice=="7613") %>% 
+distinct(code_station_hydrobio)
+
+sta_hrb_2014<-i2m2_hdf %>% 
+filter(annee==2014 & code_indice=="7613") %>% 
+distinct(code_station_hydrobio)
+
+```
+
+
+#### Identifications des stations (et de la période max) pour un suivi tous les ans 
+
+```{r}
+#intersection des années 2018 et 2020 et 2019 et 2021
+
+sta_hrb_com_1820<-generics :: intersect ( sta_hrb_2018, sta_hrb_2020)
+
+sta_hrb_com_1921<-generics :: intersect ( sta_hrb_2019,
+                                           sta_hrb_2021)
+
+```
+
+Il y a 92 stations communes aux années 2018 et 2020 et aussi aux années 2019 et 2021. Voyons si ces stations sont les mêmes. 
+
+```{r}
+
+sta_hrb_com_18a21<-generics :: intersect ( sta_hrb_com_1820,sta_hrb_2016)
+                                           
+```
+
+Il y a 78 stations en commun entre les années 2018, 2019, 2020 et 2021. Continuons à voir si ces stations sont croisables avec d'autres années : 
+
+```{r}
+sta_hrb_com_17a21<-generics :: intersect (sta_hrb_com_18a21,sta_hrb_2017)
+
+sta_hrb_com_16a21<-generics :: intersect (sta_hrb_com_17a21,sta_hrb_2016)
+
+sta_hrb_com_15a21<-generics :: intersect (sta_hrb_com_16a21,sta_hrb_2015)
+
+sta_hrb_com_14a21<-generics :: intersect (sta_hrb_com_15a21,sta_hrb_2014)
+
+
+```
+
+Lorsque l'on rajoute les années 2017 et 2016, on tombe à 14 stations en commun à toutes les années entre 2016 et 2021 (l'ajout de l'année 2016 ne fait pas baisser ce nom, qui est le même avec uniquement l'ajout de 2017). Avec l'ajout de 2015, on tombe à 11 stations et avec l'ajout de 2014 on ne retrouve plus aucune station en commun. 
+
+#### Identifications des stations (et de la période max) pour un suivi les années paires 
+
+```{r}
+sta_hrb_com_161820<-generics :: intersect (sta_hrb_com_1820,sta_hrb_2016)
+
+sta_hrb_com_14161820<-generics :: intersect (sta_hrb_com_161820,sta_hrb_2014)
+
+```
+
+Les années paires des 2016 à 2020 (soit 3 années) ont 26 stations en commun. Lorsque l'on rajoute 2014, il n'y a plus aucune station en commun. 
+
+#### Identifications des stations (et de la période max) pour un suivi les années impaires 
+
+```{r}
+sta_hrb_com_171921<-generics :: intersect (sta_hrb_com_1921,sta_hrb_2017)
+
+sta_hrb_com_15171921<-generics :: intersect (sta_hrb_com_171921,sta_hrb_2015)
+```
+
+Les années impaires de 2015 à 2021 (soit 4 années) ont 11 stations en commun. Sans l'année 2015, ce nombre monte à 16 stations.
+
+
+### Identification des stations utilisables pour l'étude des taxons 
+
+```{r}
+# nombre de stations par année avec une liste faunistique 
+
+taxons_macro_hdf %>% 
+  dplyr::group_by(annee,code_station_hydrobio) %>% 
+  dplyr::summarise(total_indiv=sum(resultat_taxon)) %>% 
+ ggplot(aes(x=annee))+geom_bar() +
+  geom_text(aes(label = ..count..), stat = "count", vjust = 1.5, colour = "white")
+```
+
+
+```{r}
+sta_hrb_tx_2018<-taxons_macro_hdf %>% 
+filter(annee==2018) %>% 
+distinct(code_station_hydrobio)
+
+sta_hrb_tx_2020<-taxons_macro_hdf %>% 
+filter(annee==2020) %>% 
+distinct(code_station_hydrobio)
+
+sta_hrb_tx_2019<-taxons_macro_hdf %>% 
+filter(annee==2019) %>% 
+distinct(code_station_hydrobio)
+
+sta_hrb_tx_2021<-taxons_macro_hdf %>% 
+filter(annee==2021) %>% 
+distinct(code_station_hydrobio)
+
+sta_hrb_tx_2017<-taxons_macro_hdf %>% 
+filter(annee==2017) %>% 
+distinct(code_station_hydrobio)
+
+sta_hrb_tx_2016<-taxons_macro_hdf %>% 
+filter(annee==2016 ) %>% 
+distinct(code_station_hydrobio)
+
+sta_hrb_tx_2015<-taxons_macro_hdf %>% 
+filter(annee==2015) %>% 
+distinct(code_station_hydrobio)
+
+sta_hrb_tx_2014<-taxons_macro_hdf %>% 
+filter(annee==2014) %>% 
+distinct(code_station_hydrobio)
+
+sta_hrb_tx_2013<-taxons_macro_hdf %>% 
+filter(annee==2013) %>% 
+distinct(code_station_hydrobio)
+
+sta_hrb_tx_2012<-taxons_macro_hdf %>% 
+filter(annee==2012) %>% 
+distinct(code_station_hydrobio)
+
+sta_hrb_tx_2011<-taxons_macro_hdf %>% 
+filter(annee==2011) %>% 
+distinct(code_station_hydrobio)
+
+sta_hrb_tx_2010<-taxons_macro_hdf %>% 
+filter(annee==2010) %>% 
+distinct(code_station_hydrobio)
+```
+
+```{r}
+sta_tx_com2021<-generics::intersect(sta_hrb_tx_2021, sta_hrb_tx_2020)
+
+sta_tx_com19a21<-generics::intersect(sta_hrb_tx_2019, sta_tx_com2021)
+
+sta_tx_com18a21<-generics::intersect(sta_hrb_tx_2018, sta_tx_com19a21)
+
+sta_tx_com17a21<-generics::intersect(sta_hrb_tx_2017, sta_tx_com18a21)
+
+sta_tx_com16a21<-generics::intersect(sta_hrb_tx_2016, sta_tx_com17a21)
+
+sta_tx_com15a21<-generics::intersect(sta_hrb_tx_2015, sta_tx_com16a21)
+
+sta_tx_com14a21<-generics::intersect(sta_hrb_tx_2014, sta_tx_com15a21)
+
+sta_tx_com13a21<-generics::intersect(sta_hrb_tx_2013, sta_tx_com14a21)
+
+sta_tx_com12a21<-generics::intersect(sta_hrb_tx_2012, sta_tx_com13a21)
+
+sta_tx_com11a21<-generics::intersect(sta_hrb_tx_2011, sta_tx_com12a21)
+
+sta_tx_com10a21<-generics::intersect(sta_hrb_tx_2010, sta_tx_com11a21)
+
+```
+
+Il y a en tout 19 stations en commun chaque année entre 2010 et 2021.
+
+Nombre de stations en commun entre : 
+-2020 et 2021 : 89
+-2019 à 2021 : 89
+-2018 à 2021 : 87 
+-2017 à 2021 : 25 
+-2016 à 2021 : 25 
+-2015 à 2021 : 22 
+-2014 à 2021 : 22 
+-2013 à 2021 : 21 
+-2012 à 2021 : 21
+-2011 à 2021 : 20
+-2010 à 2021 : 19
+
+```{r}
+# création d'un vecteur contenant ces stations 
+
+sta_hrb_tx<-as.character(sta_tx_com10a21$code_station_hydrobio)
 
 ```
 
 
 
+En observant le data frame, on constate qu'il y a un problème avec les données de phase : les phases ne sont pas annotées de la même manière selon les années, parfois elle sont du type B1, B2, B3, des fois du type A, B,C, C' ou encore numérotées de 1 à 12 ou de p1 à p12. 
+
+Grâce à Yves-Marie HENO du laboratoire d'hydrobiologie, les libellés de phases ont été standardisés. De plus, il a recalculé, à partir des liste faunistiques grâce à un script R tiré des fonctions du SEEE, les I2M2 et leurs métriques pour toutes les données de taxons disponibles. Les stations selectionnées pour l'étude des taxons pourront donc aussi être utilsiées pour une étude de l'I2M2 et de ses métriques. 
+
+La tableau d'I2M2 et ses métriques est disponible dans le RData "I2M2.Rda" et les scripts qui ont permis de mettre en forme le tableau d'indicateur de l'API et de calculer l'indicateurs et ses métriques sont aussi disponibles, dans les fichiers R scripts minvHDF_I2M2.R et 30_calcule_SEEE_I2M2_eptb.R. 
+
+
+```{r}
+#importation du data frame d'I2M2 et ses métriques 
+
+load(file="raw_data/I2M2.Rda")
+
+Tableau_i2m2_metriques$LIB_PAR<-as.factor(Tableau_i2m2_metriques$LIB_PAR)
+Tableau_i2m2_metriques$CODE_STATION<-as.factor(Tableau_i2m2_metriques$CODE_STATION)
+Tableau_i2m2_metriques$DATE<-ymd(Tableau_i2m2_metriques$DATE)
+
+Tableau_i2m2_metriques<-Tableau_i2m2_metriques %>% 
+  mutate(annee=substr(DATE, 1,4))
+
+Tableau_i2m2_metriques$annee<-as.factor(Tableau_i2m2_metriques$annee)
+
+Tableau_i2m2_metriques[Tableau_i2m2_metriques$annee %in% c("2011", "2017", "2018", "2019", "2020") ,"secheresse"] <- "secheresse" 
+Tableau_i2m2_metriques[Tableau_i2m2_metriques$annee %in% c("2012", "2021"),  "secheresse"] <- "post_secheresse"
+Tableau_i2m2_metriques[Tableau_i2m2_metriques$annee %in% c("2010", "2013", "2014", "2015", "2016") ,"secheresse"] <- "pas_secheresse"
+
+Tableau_i2m2_metriques$secheresse<-ordered(Tableau_i2m2_metriques$secheresse, levels=c("pas_secheresse", "secheresse", "post_secheresse"))
+
+Tableau_i2m2_metriques<-Tableau_i2m2_metriques %>% 
+  drop_na() %>% # suppression des NA 
+  unique()
 
 
 
+```
+
+## Selection des stations 
+
+Pour quelques stations, le calcul d'indicateur et de métriques n'a pas pu être fait, car la typologie du cours n'a pas pu être prise en compte dans le calcul. Il est donc probable que les 19 stations identifiées comme ayant de la donnée en continue sur les années 2010-2021 ne soient plus au nombre de 19. C'est pour cela que l'identifiation des stations en commun sur toutes les années de  2010 à 2021 est refaite ci-dessous. 
+
+```{r}
+sta_hrb_ind_2018<-Tableau_i2m2_metriques %>% 
+filter(annee==2018 & LIB_PAR=="Ind Invert Multimetrique") %>% 
+distinct(CODE_STATION)
+
+sta_hrb_ind_2020<-Tableau_i2m2_metriques %>% 
+filter(annee==2020  & LIB_PAR=="Ind Invert Multimetrique") %>% 
+distinct(CODE_STATION)
+
+sta_hrb_ind_2019<-Tableau_i2m2_metriques %>% 
+filter(annee==2019 & LIB_PAR=="Ind Invert Multimetrique") %>% 
+distinct(CODE_STATION)
+
+sta_hrb_ind_2021<-Tableau_i2m2_metriques %>% 
+filter(annee==2021 & LIB_PAR=="Ind Invert Multimetrique") %>% 
+distinct(CODE_STATION)
+
+sta_hrb_ind_2017<-Tableau_i2m2_metriques %>% 
+filter(annee==2017 & LIB_PAR=="Ind Invert Multimetrique") %>% 
+distinct(CODE_STATION)
+
+sta_hrb_ind_2016<-Tableau_i2m2_metriques %>% 
+filter(annee==2016 & LIB_PAR=="Ind Invert Multimetrique") %>% 
+distinct(CODE_STATION)
+
+sta_hrb_ind_2015<-Tableau_i2m2_metriques %>% 
+filter(annee==2015 & LIB_PAR=="Ind Invert Multimetrique") %>% 
+distinct(CODE_STATION)
+
+sta_hrb_ind_2014<-Tableau_i2m2_metriques %>% 
+filter(annee==2014 & LIB_PAR=="Ind Invert Multimetrique") %>% 
+distinct(CODE_STATION)
+
+sta_hrb_ind_2013<-Tableau_i2m2_metriques %>% 
+filter(annee==2013 & LIB_PAR=="Ind Invert Multimetrique") %>% 
+distinct(CODE_STATION)
+
+sta_hrb_ind_2012<-Tableau_i2m2_metriques %>% 
+filter(annee==2012 & LIB_PAR=="Ind Invert Multimetrique") %>% 
+distinct(CODE_STATION)
+
+sta_hrb_ind_2011<-Tableau_i2m2_metriques %>% 
+filter(annee==2011 & LIB_PAR=="Ind Invert Multimetrique") %>% 
+distinct(CODE_STATION)
+
+sta_hrb_ind_2010<-Tableau_i2m2_metriques %>% 
+filter(annee==2010 & LIB_PAR=="Ind Invert Multimetrique") %>% 
+distinct(CODE_STATION)
+```
+
+```{r}
+sta_ind_com2021<-generics::intersect(sta_hrb_ind_2021, sta_hrb_ind_2020)
+
+sta_ind_com19a21<-generics::intersect(sta_hrb_ind_2019, sta_ind_com2021)
+
+sta_ind_com18a21<-generics::intersect(sta_hrb_ind_2018, sta_ind_com19a21)
+
+sta_ind_com17a21<-generics::intersect(sta_hrb_ind_2017, sta_ind_com18a21)
+
+sta_ind_com16a21<-generics::intersect(sta_hrb_ind_2016, sta_ind_com17a21)
+
+sta_ind_com15a21<-generics::intersect(sta_hrb_ind_2015, sta_ind_com16a21)
+
+sta_ind_com14a21<-generics::intersect(sta_hrb_ind_2014, sta_ind_com15a21)
+
+sta_ind_com13a21<-generics::intersect(sta_hrb_ind_2013, sta_ind_com14a21)
+
+sta_ind_com12a21<-generics::intersect(sta_hrb_ind_2012, sta_ind_com13a21)
+
+sta_ind_com11a21<-generics::intersect(sta_hrb_ind_2011, sta_ind_com12a21)
+
+sta_ind_com10a21<-generics::intersect(sta_hrb_ind_2010, sta_ind_com11a21)
+
+```
+
+Il y a 16 stations en commun entre 2010 et 2021. 
+
+```{r}
+#création d'un vecteur des 16 stations qui disposent d'un I2M2/métriques entre 2010 et 2021 
+
+sta_hrb_ind<-as.character(sta_ind_com10a21$CODE_STATION)
 
 
+```
 
 
+## Evolution de l'I2M2 et ses métriques 
+
+### Représentation graphique 
+
+L'idée est de pouvoir identifier si on observe des grandes tendences de l'I2M2 et ses métriques sur l'ensemble des 19 stations sur la période 2010-2021. Pour chaque indicateur, les distribution sur les 19 stations seront illustrées puis l'évolution à la station sera montré. 
 
 
+```{r}
+Tableau_i2m2_metriques %>% 
+  filter(LIB_PAR=="Ind Invert Multimetrique" & CODE_STATION %in% c(sta_hrb_ind)) %>% 
+  ggplot(aes(x=annee, y=RESULTAT, group=1, color=secheresse))+
+  geom_point()+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("I2M2")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+  
+```
+
+Le ligne noire sur le graphique ci-dessus représente la médiane de la distribution pour chaque année.Certains points sont superposés : pour éviter les supperposition, le terme position="jitter" peut être ajouté dans le geom_point, mais en contrepartie le graphique est moins lisible. 
+
+
+```{r}
+Tableau_i2m2_metriques %>% 
+  filter(LIB_PAR=="IndiceShannonI2M2" & CODE_STATION %in% c(sta_hrb_ind)) %>% 
+  ggplot(aes(x=annee, y=RESULTAT, group=1, color=secheresse))+
+  geom_point()+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("Indice de Shanon de l'I2M2")+ 
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+```
+
+```{r}
+Tableau_i2m2_metriques %>% 
+  filter(LIB_PAR=="AverageScorePerTaxonI2M2" & CODE_STATION %in% c(sta_hrb_ind)) %>% 
+  ggplot(aes(x=annee, y=RESULTAT, group=1, color=secheresse))+
+  geom_point()+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("ASPT")+ 
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+```
+
+```{r}
+Tableau_i2m2_metriques %>% 
+  filter(LIB_PAR=="PolyvoltinismeI2M2" & CODE_STATION %in% c(sta_hrb_ind)) %>% 
+  ggplot(aes(x=annee, y=RESULTAT, group=1, color=secheresse))+
+  geom_point()+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("Polyvoltinisme de l'I2M2")+ 
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+```
+
+
+```{r}
+Tableau_i2m2_metriques %>% 
+  filter(LIB_PAR=="OvovivipariteI2M2" & CODE_STATION %in% c(sta_hrb_ind)) %>% 
+  ggplot(aes(x=annee, y=RESULTAT, group=1, color=secheresse))+
+  geom_point()+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("Ovociparité de l'I2M2")+ 
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+```
+
+
+```{r}
+Tableau_i2m2_metriques %>% 
+  filter(LIB_PAR=="RichesseI2M2" & CODE_STATION %in% c(sta_hrb_ind)) %>% 
+  ggplot(aes(x=annee, y=RESULTAT, group=1, color=secheresse))+
+  geom_point()+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("Richesse taxonomique de l'I2M2")+ 
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+```
+
+```{r}
+Tableau_i2m2_metriques %>% 
+  filter(LIB_PAR=="NbTaxonsI2M2Contributifs" & CODE_STATION %in% c(sta_hrb_ind)) %>% 
+  ggplot(aes(x=annee, y=RESULTAT, group=1, color=secheresse))+
+  geom_point()+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("Nombre de taxons utilisés pour calculer l'I2M2")+ 
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+```
+
+On peut représenter tous ces graphiques sur un même panneau:
+
+
+```{r}
+#ordonnement des niveau du facteur LIB_PAR, pour pouvoir afficher les graphs facette dans l'ordre que'on veut 
+
+Tableau_i2m2_metriques$LIB_PAR<-ordered(Tableau_i2m2_metriques$LIB_PAR, levels=c("Ind Invert Multimetrique",    "AverageScorePerTaxonI2M2","PolyvoltinismeI2M2","OvovivipariteI2M2", "IndiceShannonI2M2","RichesseI2M2","NbTaxonsI2M2Contributifs"))
+
+
+```
+
+
+```{r}
+Tableau_i2m2_metriques%>% 
+  filter(CODE_STATION %in% c(sta_hrb_ind) & LIB_PAR %in% c("IndiceShannonI2M2",
+                                                          "AverageScorePerTaxonI2M2",
+                                                          "PolyvoltinismeI2M2",
+                                                          "OvovivipariteI2M2",
+                                                          "RichesseI2M2",
+                                                          "Ind Invert Multimetrique")) %>% 
+  ggplot(aes(x=annee, y=RESULTAT, group=1, color=secheresse))+
+  geom_point(size=0.8)+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("Résultat de l'indicateur/métrique")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  facet_wrap(~LIB_PAR)+
+  theme(strip.text.x = element_text(size = 8))
+```
+
+On peut maintenant regarder à la station si on observe des choses interessantes pour chaque indicateur ou métrique : 
+
+```{r}
+Tableau_i2m2_metriques %>% 
+  filter(CODE_STATION %in% sta_hrb_ind & LIB_PAR=="Ind Invert Multimetrique") %>% 
+  ggplot(aes(x=annee, y=RESULTAT, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("I2M2")+
+  facet_wrap(~CODE_STATION)
+
+```
+
+
+```{r}
+Tableau_i2m2_metriques %>% 
+  filter(CODE_STATION %in% sta_hrb_ind & LIB_PAR=="AverageScorePerTaxonI2M2") %>% 
+  ggplot(aes(x=annee, y=RESULTAT, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("ASPT")+
+  facet_wrap(~CODE_STATION)
+```
+
+
+```{r}
+Tableau_i2m2_metriques %>% 
+  filter(CODE_STATION %in% sta_hrb_ind & LIB_PAR=="PolyvoltinismeI2M2") %>% 
+  ggplot(aes(x=annee, y=RESULTAT, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("Polyvoltinisme de l'I2M2")+
+  facet_wrap(~CODE_STATION)
+```
+
+
+```{r}
+Tableau_i2m2_metriques %>% 
+  filter(CODE_STATION %in% sta_hrb_ind & LIB_PAR=="OvovivipariteI2M2") %>% 
+  ggplot(aes(x=annee, y=RESULTAT, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("Ovoviparité de l'I2M2")+
+  facet_wrap(~CODE_STATION)
+```
+
+
+```{r}
+Tableau_i2m2_metriques %>% 
+  filter(CODE_STATION %in% sta_hrb_ind & LIB_PAR=="IndiceShannonI2M2") %>% 
+  ggplot(aes(x=annee, y=RESULTAT, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("Indice de Shanon de l'I2M2")+
+  facet_wrap(~CODE_STATION)
+```
+
+
+```{r}
+Tableau_i2m2_metriques %>% 
+  filter(CODE_STATION %in% sta_hrb_ind & LIB_PAR=="RichesseI2M2") %>% 
+  ggplot(aes(x=annee, y=RESULTAT, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("Richesse taxonomique de l'I2M2")+
+  facet_wrap(~CODE_STATION)
+
+```
+
+### Tests statistiques 
+
+Le but des test statistiques et de déterminer si le facteur sécheresse a un effet significatif sur l'I2M2 et ses métriques. 
+Comme les sécheresse sont plutôt regroupées ces dernières années, le facteur année pourrait également avoir un effet sur les indicateurs, que l'on pourrait essayer de dissocier du facteur sécheresse. En outre, le facteur station serait aussi susceptible d'influencer les résultats des testes, sans toutefois que l'effet direct de la station sur les indicateurs soient interessants : la station est interessante à intégréer au modèle potentiel car elle peut créer un effet "groupe" dans les indicateurs, mais elle ne nous interesse pas en temps que telle. 
+
+Le but de cette partie est donc de tester le facteur sécheresse, accompagnié ou non selon le modèle, des facteurs année et station. 
+
+Nous pouvons commencer par tester des modèles linéaires mixtes (MLM), qui permettent d'étudier l'effets de facteurs aléatoire ( ici la station), mais qui necessitent la normalité et l'homogénéité des résisus. Si ces hypothèses ne sont pas validées, nous pourrons tester un test de Scheiner-Ray-Hare non paramétrique à deux facteurs, mais qui a le désavantage de n'être que peu robuste. Sinon, il sera toujours possible de réaliser un test de kruskal wallis non paramétrique à un facteur sur la sécheresse et les années séparemment. 
+
+#### MLM 
+
+```{r}
+library(lme4)
+```
+
+Le modèle à priori que nous allons tester est du type : Indicateur ~Secheresse (fixe) * Annee (fixe) + Station(aléatoire). 
+
+```{r}
+# création d'un data frame qui ne contient que les résultat d'i2m2 
+
+df_MLM_i2m2<-Tableau_i2m2_metriques %>% 
+  filter(LIB_PAR=="Ind Invert Multimetrique")
+```
+
+
+```{r}
+#ecriture du MLM 
+
+MLM_i2m2<-lmer(data=df_MLM_i2m2, RESULTAT~secheresse*annee+(1+RESULTAT|CODE_STATION))
+```
+
+```{r}
+#Vérification des hypothèses de validité
+    
+    # A. Vérifiez l'homogénéité : graphique des valeurs prédites vs valeurs résiduelles
+    E1 <- resid(MLM_i2m2)
+    F1 <- fitted(MLM_i2m2)
+    plot(x = F1, 
+         y = E1, 
+         xlab = "Fitted Values",
+         ylab = "Normalized residuals")
+    abline(h = 0, lty = 2)
+
+
+```
+
+
+```{r}
+res_MLM_i2m2<-residuals(MLM_i2m2)
+shapiro.test(res_MLM_i2m2)       # normalité rejetée 
+```
+```{r}
+
+
+```
+
+Les hypothèses de validité de sont pas validées (et ne le seront probablement pas pour les autres indicateurs), donc le test effectué pour l'effet des facteurs sécheresse et année sur les indicateurs sera un test de Sheiner-Ray-Hare. 
+
+
+#### Test de Sheiner-Ray-Hare 
+
+```{r}
+library(rcompanion)
+```
+
+##### I2M2 
+
+
+```{r}
+#I2M2 
+
+scheirerRayHare(RESULTAT~secheresse*annee, data=df_MLM_i2m2)
+```
+Le facteur secheresse n'a pas d'effet significatif, l'interaction annee et secheresse n'est pas significative. Par contre, il semblerait que le facteur annee ait un effet significatif sur l'i2m2. Cela semble étrange au vu des graphique, donc on peut vérifier avec un test de Kruskal wallis uniquement sur les années : 
+
+```{r}
+kruskal.test(RESULTAT~annee, data=df_MLM_i2m2)
+```
+Le test de Kruskal wallis confirme l'effet significatif des années sur l'i2m2. On peut réaliser un test de dunn pour identifier les années ou l'i2m2 est significativement différent des autres : 
+
+```{r}
+
+library(FSA)
+
+dunnTest(RESULTAT~annee, data=df_MLM_i2m2)
+
+```
+
+
+Le test indique que les années où l'i2m2 est significativement différent sont :
+
+-2010 et 2017 
+-2015 et 2017 
+-2012 et 2020 
+-2016 et 2020 
+-2017 et 2020 
+-2017 et 2021 
+
+```{r}
+# création de groupes avec la fonction kruskal() de agricolae 
+
+comparison<-with(df_MLM_i2m2 ,kruskal(RESULTAT,annee, group=TRUE, p.adj = "bon"))
+comparison
+```
+
+Les groupes formés par le test de kruskal sont légèrement différents du test de dunn. 
+POur une question de praticité (parce que le test kruskal forme directement des groupes, pas uniquement des paires), c'est le test de kruskal avec la méthode d'ajustement de bonferoni qui sera utilisé pour les autres indicateurs. 
+
+###### ASPT 
+
+```{r}
+# création data frame ne contenat que l'aspt 
+
+df_ASPT<-Tableau_i2m2_metriques %>% 
+  filter(LIB_PAR=="AverageScorePerTaxonI2M2")
+```
+
+```{r}
+# test de sheirer ray hare 
+
+scheirerRayHare(RESULTAT~secheresse*annee, data=df_ASPT)
+```
+De nouveau, pas d'effet significatif de la secheresse, l'interaction secheresse*annee n'est pas significative, mais l'annee a un effet significatif sur l'aspt. 
+
+```{r}
+#formation de groupes pour l'effet de l'année sur l'aspt 
+
+comparison<-with(df_ASPT ,kruskal(RESULTAT,annee, group=TRUE, p.adj = "bon"))
+comparison
+
+```
+Pas d'effet significatif de l'année pour une formation de groupes avec ce test. Essayons avec le test de dunn. 
+
+```{r}
+
+dunnTest(RESULTAT~annee, data=df_ASPT)
+```
+
+Le test de dunn ne montre pas non plus d'effet significatif de l'annee. 
+
+##### Polyvoltinisme 
+
+```{r}
+
+#création du data frame 
+
+df_poly<-Tableau_i2m2_metriques %>% 
+  filter(LIB_PAR=="PolyvoltinismeI2M2")
+```
+
+
+```{r}
+# test de Scheirer-Ray-Hare 
+
+scheirerRayHare(RESULTAT~secheresse*annee, data=df_poly)
+
+```
+Pas d'effet significatif de la secheresse, pas d'interaction, mais une drôle de p-value égale à 0 (ou alors le test n'affiche que les premières décimales et ne mets pas en écriture scientifique). Le facteur année aurait un effet significatif sur le polyvoltinisme. 
+
+```{r}
+#groupes sur les années avec kruskal
+
+comparison<-with(df_poly ,kruskal(RESULTAT,annee, group=TRUE, p.adj = "bon"))
+comparison
+
+```
+
+
+##### Ovoviparité 
+
+```{r}
+# création du data frame d'ovoviparité 
+
+df_ovo<- Tableau_i2m2_metriques %>% 
+  filter(LIB_PAR=="OvovivipariteI2M2") 
+```
+
+
+```{r}
+# test de sheirer
+
+scheirerRayHare(RESULTAT~secheresse*annee, data=df_ovo)
+
+```
+Meme constat que pour tous les autres paramètres, pas d'effet de la sécherersse, pas d'intéraction, effet de l'année. 
+
+```{r}
+comparison<-with(df_ovo ,kruskal(RESULTAT,annee, group=TRUE, p.adj = "bon"))
+comparison
+```
+
+
+##### Richesse 
+
+```{r}
+# création du df 
+
+df_rich<-Tableau_i2m2_metriques %>% 
+  filter(LIB_PAR=="RichesseI2M2")
+```
+
+
+```{r}
+#test de scheirer 
+
+scheirerRayHare(RESULTAT~secheresse*annee, data=df_rich)
+
+```
+
+Encore le même constat, pas d'effet de la sécheresse, pas d'interaction, effet de l'année. 
+
+```{r}
+comparison<-with(df_rich ,kruskal(RESULTAT,annee, group=TRUE, p.adj = "bon"))
+comparison
+```
+Le test de kruskal ne montre aucune différence significative entre les années. 
+
+##### Indice de Shanon de l'I2M2 
+
+```{r}
+#création du df 
+
+df_shanon<- Tableau_i2m2_metriques %>% 
+  filter(LIB_PAR=="IndiceShannonI2M2")
+```
+
+
+```{r}
+#test de scheirer 
+
+scheirerRayHare(RESULTAT~secheresse*annee, data=df_shanon)
+
+```
+Toujours les même conclusions. 
+
+```{r}
+comparison<-with(df_shanon ,kruskal(RESULTAT,annee, group=TRUE, p.adj = "bon"))
+comparison
+
+```
+
+## NOmbre total d'individus chironomes et ephemères  
+
+Le data frame utilisé sera celui de l'API Hydrobio (extrait de Naïades), même pour le nombre total de taxon par année. En effet, certains taxons de la liste faunistique ne sont pas renseignés dans le SEEE et n'ont donc pas té pris en compte pour les calculs de métriques. 
+
+Avant de pouvoir utilisé le data frame de taxons de l'API, il faut régler le problème de noms de phases qui ne sont pas reneignées de façon standardisée. Le code écrit par Yves-Marie HENO servira à cela.
+
+
+```{r}
+# impotation du fichier excel envoyé à YmH sur grâce auquel il a construit son script 
+
+library(readxl)
+
+taxons_macro_hdf2<-read_excel("raw_data/taxons_macro_hdf.xlsx")
+
+```
+
+
+```{r}
+# Code de YM.Heno 
+
+Phase <- taxons_macro_hdf2[,9]
+
+i <- which(Phase =="1" | Phase =="2" | Phase =="3" | Phase =="4" | Phase =="P1" | Phase =="P2" | Phase =="P3" | Phase =="P4" | Phase =="B1")
+Phase[i,1] <- "A"
+
+i <- which(Phase =="5" | Phase =="6" | Phase =="7" | Phase =="8" | Phase =="P5" | Phase =="P6" | Phase =="P7" | Phase =="P8" |
+             Phase =="B2" |  Phase =="B4")
+Phase[i,1] <- "B"
+
+i <- which(Phase =="9" | Phase =="10" | Phase =="11" | Phase =="12" | Phase =="C'" | Phase =="P9" | Phase =="P10" | Phase =="P11" |
+             Phase =="P12"| Phase =="B3")
+Phase[i,1] <- "C"
+taxons_macro_hdf2[,9] <- Phase
+taxons_macro_hdf3 <-  mutate(taxons_macro_hdf,code_op=paste0(code_station_hydrobio,date_prelevement))
+n <-nrow(Phase)
+Vecteur_vide <- rep("",n)
+
+```
+
+Vérifions que toutes les phases sont sous forme A,B ou C :
+
+```{r}
+#transformation du code de phase en facteur 
+
+taxons_macro_hdf2$code_phase<-as.factor(taxons_macro_hdf2$code_phase)
+
+levels(taxons_macro_hdf2$code_phase)
+```
+```{r}
+#création du data frame du nombre d'individus par taxon par année 
+
+taxons_macro_hdf2<-taxons_macro_hdf2 %>% 
+  mutate(annee=substr(date_prelevement, 1,4))
+
+taxons_macro_hdf2[taxons_macro_hdf2$annee %in% c("2011", "2017", "2018", "2019", "2020") ,"secheresse"] <- "secheresse" 
+taxons_macro_hdf2[taxons_macro_hdf2$annee %in% c("2012", "2021"),  "secheresse"] <- "post_secheresse"
+taxons_macro_hdf2[taxons_macro_hdf2$annee %in% c("2010", "2013", "2014", "2015", "2016") ,"secheresse"] <- "pas_secheresse"
+
+nb_indiv_macro<-taxons_macro_hdf2 %>% 
+  filter(code_station_hydrobio %in% sta_hrb_tx) %>% 
+  dplyr::group_by(annee, secheresse, code_station_hydrobio, libelle_appel_taxon) %>% 
+  dplyr::summarise(nb_indiv=sum(resultat_taxon))
+
+
+```
+
+
+```{r}
+
+#histogramme du nombre de chironomidae total en fonction des années 
+
+nb_indiv_macro %>% 
+  filter(libelle_appel_taxon=="Chironomidae") %>% 
+ ggplot(aes(x=annee, y=nb_indiv, fill=secheresse))+
+  geom_boxplot()+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("Nombre d'individus Chironomidae")+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+
+```
+
+```{r}
+# création d'un df séparér pour les chironomes 
+
+df_chiro<-nb_indiv_macro %>% 
+  filter(libelle_appel_taxon=="Chironomidae")
+```
+
+```{r}
+
+# test de scheirer 
+
+scheirerRayHare(nb_indiv~secheresse*annee, data=df_chiro)
+```
+Rien n'est significatif, même l'année.  
+
+```{r}
+
+comparison<-with(df_chiro ,kruskal(nb_indiv,annee, group=TRUE, p.adj = "bon"))
+comparison
+```
+
+
+```{r}
+
+#nb chironomes à la station 
+
+df_chiro %>% 
+ ggplot(aes(x=annee, y=nb_indiv, fill=secheresse))+
+  geom_col()+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("Nombre d'individus Chironomidae")+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text = element_text(size = 6))+
+  
+  facet_wrap(~code_station_hydrobio)
+```
+
+
+```{r}
+#df pour le nb indiv epehemeres 
+
+df_ephe<-nb_indiv_macro %>% 
+  filter(libelle_appel_taxon=="Ephemera")
+```
+
+```{r}
+#boxplot 
+
+df_ephe %>% 
+ ggplot(aes(x=annee, y=nb_indiv, fill=secheresse))+
+  geom_boxplot()+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("Nombre d'individus Ephemera")+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+```
+```{r}
+scheirerRayHare(nb_indiv~secheresse*annee, data=df_ephe)
+```
+Aucun effet, même de l'année.  
+
+
+```{r}
+df_ephe %>% 
+ ggplot(aes(x=annee, y=nb_indiv, fill=secheresse))+
+  geom_col()+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("Nombre d'individus Ephemera")+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text = element_text(size = 7))+
+  
+  facet_wrap(~code_station_hydrobio)
+```
+
+## Richesse taxonomique 
+
+La richesse taxonomique (nombre total de taxons) sera calculées à partir de la liste faunistique, étant donnée que certains taxons n'ont pa été intégrés dans le calculs de l'i2m2 et de ses métriques. 
+
+```{r}
+# calcul de la richesse taxonomique par année toutes stations confondues 
+
+richess_taxo<-nb_indiv_macro %>% 
+  filter(nb_indiv!=0) %>% 
+  dplyr::group_by(annee, secheresse, code_station_hydrobio) %>% 
+  dplyr::summarise(richesse=n())
+  
+
+```
+
+
+```{r}
+richess_taxo %>% 
+  ggplot(aes(x=annee, y=richesse, group=1, color=secheresse))+
+  geom_point()+
+  stat_summary(fun.y = "median", geom = "line", color = "black", size = 1.2)+
+  theme(axis.text.x = element_text(angle = 90))+ 
+  ylab("Richesse taxonomique")+
+  scale_color_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))
+  
+```
+
+
+```{r}
+# test de sheirer 
+
+scheirerRayHare(richesse~secheresse*annee, data=richess_taxo)
+
+```
+
+Rien n'est significatif. 
+
+
+```{r}
+#représentaton par années 
+
+richess_taxo %>% 
+ ggplot(aes(x=annee, y=richesse, fill=secheresse))+
+  geom_col()+
+  scale_fill_manual(values = c("secheresse" = '#e6194b',  "pas_secheresse"='#3cb44b',
+                                'post_secheresse' = '#ffe119'))+
+  theme(axis.text.x = element_text(angle = 90))+
+  theme(axis.text = element_text(size = 7))+
+  ylab("Richesse taxonomique")+
+  facet_wrap(~code_station_hydrobio)
+
+```
 
