@@ -1,0 +1,531 @@
+---
+title: "Identification des tendances de sécheresse hydrologique dans les Hauts-de-France
+  (données de débits)"
+author: "Imane PALAGI"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning=FALSE, message=FALSE)
+```
+
+Ce document a pour but d'identifier des tendances de sécheresse
+hydrologique à l'échelle des Hauts-de-France, via le calcul de
+différents indicateurs issus de données de débits.
+
+```{r}
+#Importation des packages necessaires
+
+if (!require(pacman)) install.packages("pacman") 
+
+pacman::p_load(tidyverse, hubeau, hydroTSM, runner, tictoc) # installe les packages non installés et charge tout
+
+# hub'eau : package pour les données de débits 
+# hydroTSM : package traitement/analyse de séries temporelles liées à l'hydrologie 
+# runner : package qui permet de calculer des moyennes glissantes 
+
+```
+
+```{r}
+#installation des fonctions nécessaires 
+
+source("function/traitement_debits.R")
+```
+
+# I) Chargement des chroniques de débits
+
+Les stations de débits utilisées sont toutes le stations des BSH
+Artois-Picardie et Seine-Normandie en Hauts-de-France ayant des
+chroniques de données suffisamment complètes et continues sur les 30
+dernières années.
+
+Ces stations sont :
+
+**Bassin Artois-Picardie** :
+
+E5505720 AUTHIE Dompierre Authie
+
+E5406510 TERNOISE Hesdin
+
+E5400310 CANCHE Brimeux
+
+E5300210 LIANE Wirwignes
+
+E5205710 WIMEREUX Wimille
+
+E4905710 YSER Bambecque
+
+E4306010 HEM Guémy
+
+E4035710 AA Wizernes
+
+E3646210 CLARENCE Robecq
+
+E3518510 LAQUETTE Witternesse
+
+E3511220 LYS Delettes
+
+E3346020 MARQUE Ennevelin
+
+E2367410 COURANT COUTICHES Flines Lez Raches
+
+E1827020 HOGNEAU Thivencelle
+
+E1766010 RHONELLE Aulnoy
+
+E1727510 ECAILLON Thiant
+
+D0206010 SOLRE Ferrière la Grande
+
+D0137010 HELPE MINEURE Etroeungt
+
+E6498315 Maye Arry
+
+E6470910 Somme canalisée Abbeville US
+
+E6426010 Selle Plachy-Buyon E6406010 Avre Moreuil
+
+**Bassin Seine-Normandie** :
+
+H7053110 Ancienne Sambre Le Nouvion en Thiérache
+
+H7021010 Oise Hirson
+
+H7142010 Serre Mortiers
+
+H7302020 Ailette Chavignon
+
+H5522010 Ourcq Chouy
+
+H7401010 Oise Sempigny
+
+H7423711 Aronde Clairoix US
+
+H7513010 Automne Saintines
+
+H7602010 Brêche Nogent-sur-Oise
+
+H7742010 Thérain Beauvais
+
+H7813210 Launette Ver-sur-Launette
+
+Les chroniques de débits sont importées grâce à l'**API Hub'eau**.
+
+```{r}
+# Exemple de l'Authie à Dompierre 
+
+q_jr <- get_hydrometrie_obs_elab(     # fonction d'importation du package hubeau 
+  list(code_entite = "E635140201",   # code de la station 
+       date_debut_obs_elab = "1992-01-01",  #date de début de l'importation 
+       date_fin_obs_elab="2022-12-31",  # date de fin de l'importation 
+       grandeur_hydro_elab = "QmJ")) %>%  # grandeur importée (QmJ= débits moyens journaliers, QmM= débits moyens mensuels)
+  select(code_station:resultat_obs_elab) %>%  #sélection des colonnes d'intêret 
+  mutate(annee = lubridate::ymd(date_obs_elab), # création d'une colonne année au format date 
+         annee = lubridate::year(annee)) # conservation uniquement de l'année dans la colonne année 
+
+#pour réaliser l'opération avec une autre station, changer le code dans code_entite
+```
+
+[Remarque 1 :]{.underline} Le code ci-dessus doit être pour l'instant
+répété pour chaque code station différent. Il serait interessant
+d'optimiser le code afin de pouvoir réaliser l'importation pour un grand
+nombre de stations de débits sans avoir à relancer le code à chaque
+fois.
+
+[Remarque 2]{.underline} : La station de la Marque à Ennevelin possède
+deux codes E3346020 et E3346022 qui ont chacun une partie de la
+chronique de débits.
+
+La suite du sript utilisera un data frame déjà construit des données de
+débits des 33 stations :
+
+```{r}
+# importation de toutes les stations hydro d'un département ou d'une région
+
+hydro_stations <- 
+  get_hydrometrie_stations(code_departement = "80") %>% 
+  filter(en_service == TRUE) %>% 
+  pull(code_station)
+
+```
+
+
+```{r}
+# import des data frame de débits moyens journaliers de toutes les stations ciblées 
+
+tic()
+q_jr_totaux<- series_stations_tot(hydro_stations, "1990-01-01", "2023-12-31", "QmJ")
+toc()
+```
+
+```{r}
+
+q_jr_totaux <- q_jr_totaux %>% 
+  reduce(rbind) %>% 
+  filter(code_station != "Aucune data" & resultat_obs_elab>= 0) %>% 
+  mutate(resultat_obs_elab= as.numeric(resultat_obs_elab)) %>% 
+  mutate(date_obs_elab = ymd(date_obs_elab))
+```
+
+```{r}
+# selection des stations qui ont suffisamment de données 
+
+nb_data_min <- 3650 # nombre de jours de données minimums pour considérer ok de calculer le seuil de sécheresse (à définir par l'opérateur selon ses exigences). 
+# Dans l'exemple (3650), nb_data_min = environ 10 ans de données en cumulé 
+  
+stations_length_check <-q_jr_totaux %>%  # donne un vecteur des stations avec "assez de données" 
+  dplyr :: group_by(code_station) %>%  
+  dplyr :: summarise(nb_jours = n()) %>% 
+  filter(nb_jours >= nb_data_min) %>% 
+  pull(code_station)
+
+q_jr_totaux_def <- q_jr_totaux %>% 
+  filter(code_station %in% stations_length_check) #filtre du data frame de débits sur les stations avec " assez de données" 
+
+```
+
+```{r}
+#Importation du data frame de débits des 33 stations 
+
+load(file="raw_data/q_journaliers_ref.RData")
+```
+
+# II) Calcul des seuils de sécheresse
+
+La sécheresse est définie ici comme le débit étant strictement inférieur
+à un débit seuil de sécheresse défini. Ce seuil a été choisi égale à 95%
+de fréquence au dépassement (courbe des débits classés en fonction de
+leurs fréquence au dépassement (FDC)). Il correspond au débit qui se
+produit moins de 5% du temps.
+
+Il est donc necessaire pour chaque station de calculer la valeur (ici en
+l/s) de ce seuil. Le package HydroTSM permet de calculer directement à
+partir d'une chronique de débits la courbe de fréquence au dépassement
+et la valeur correspondant au Q95.
+
+```{r, eval=FALSE, warning=FALSE}
+
+# Représentation des FCD et calcule du Q95 
+#Exemple pour l'Authie à Dompierre 
+# Utilisation de la fonction créée dans le script traitement_debits (y regarder les explications)
+
+seuil_sech <-calcul_1seuil_sech(q_jr, 0.95) # valeur du seuil de sécheresse + affichage de la FDC 
+
+```
+
+
+```{r, warning = FALSE}
+# calcul des seuils de sécheresse pour chacune des stations du data frame de débit 
+
+tic()
+seuils_sech_Q95 <- calcul_seuils(q_jr_totaux_def, 0.95)
+toc()
+```
+
+
+# III) Calcul des indicateurs de sécheresse 
+
+## 1) Durée de la sécheresse
+
+La durée de la sécheresse est ici assimilée au nombre de jours dans
+l'année présentant un débit strictement inférieur au seuil de
+sécheresse.
+
+```{r}
+#Exemple de calcul de la durée de sécheresse pour l'Authie à Dompierre 
+
+duree_sech_1sta <-q_jr %>% 
+  group_by(annee) %>%  # regroupement par année 
+  summarise(duree_sech=sum(resultat_obs_elab< seuil_sech)) # calcul du nombre de jour inférieur au seuil 
+
+
+```
+
+[Remarque :]{.underline} Il serait là aussi oportun d'optimiser les
+opérations pour éviter d'avoir à lancer le code pour chaque station.
+
+La suite du script utilsera un data frame déjà constitué contenant les
+durée de sécheresse pour les 33 stations :
+
+```{r}
+#duree de secheresse pour toutes les stations de q_jr_totaux_def 
+
+q_jr_totaux_def <- q_jr_totaux_def %>% 
+  left_join(seuils_sech_Q95, by=c("code_station"="stations_ciblees")) 
+
+duree_sech <- q_jr_totaux_def %>% 
+  group_by(code_station, annee) %>%  # regroupement par année 
+  summarise(duree_sech = sum (resultat_obs_elab < debit_seuil)) 
+```
+
+```{r}
+# Importation du data frame complet de durées de sécheresses par année 
+
+load(file="processed_data/duree_sech.RData")
+
+```
+
+La représentation graphique en boxplots de la durée de sécheresse en
+fonction des années pour les 33 stations montre des tendances claires de
+sécheresse :
+
+```{r}
+# Boxplots durée de la sécheresse en jours en fonction des années 
+
+duree_sech %>% 
+   ggplot(aes(x=annee, y=duree_sech))+ # abscisse et ordonnée 
+  geom_boxplot(outlier.shape=NA)+ # boxplots sans afficher les valeurs extrêmes 
+  theme(axis.text.x = element_text(angle = 90)) # étiquettes de l'axe x écrites à la verticale 
+```
+
+
+```{r}
+#nombre de stations en situation de sécheresse par an 
+
+duree_sech_sum<-duree_sech%>% 
+  dplyr::group_by(annee) %>% # groupement par année
+  dplyr::summarise(nb_stations_sech=sum(duree_sech>0)) # calcule par année du nombre de station pour lequel la durée de sécheresse est non nulle 
+
+
+# histogramme du nombre de station en situation de sécheresse 
+
+duree_sech_sum %>% 
+  filter(annee %in% c(1994:2022)) %>% #graphique pour la période 1994-2022 
+  ggplot(aes(x=annee, y=nb_stations_sech))+ # abscisse et ordonnée 
+  geom_col()+ # hidtogramme de dénombrement 
+  theme(axis.text.x = element_text(angle = 90)) # étiquettes de l'axe x à la verticale 
+  
+```
+
+## 2) Hydraulicité mensuelle
+
+L'hydraulicité mensuelle (H) correspond au rapport entre le débit moyen
+mensuel pour une année donnée et le débit moyen mensuel inter annuel.
+Elle permet de donner une indication sur l'écart à la normale un mois
+précis :
+
+-   Si H \< 1, le débit moyen mensuel est inférieur à la normale\
+-   Si H \> 1, le débit moyen mensuel est suppérieur à la normale
+
+Les débits moyens mensuels sont importés directement via l'API Hub'eau
+(de la même façon que pour les débits moyens journaliers), mais il est
+aussi possible de les calculer à partir du data frame des débits moyens
+journaliers.
+
+```{r}
+# Exemple d'importation pour l'Authie à Dompierre 
+
+qm_E550 <- get_hydrometrie_obs_elab(
+  list(code_entite = "E5505720",
+       date_debut_obs_elab = "1992-01-01",
+       date_fin_obs_elab="2022-12-31",
+       grandeur_hydro_elab = "QmM")) %>%  # QmM = débit moyen mensuel 
+  select(code_station:resultat_obs_elab) %>% 
+  mutate(annee = lubridate::ymd(date_obs_elab),
+         annee = lubridate::year(annee)) 
+```
+
+[Remarque]{.underline} : Là aussi il est interessant d'optimiser
+l'importation. Toutefois, si la deuxième méthode est utilisée (calcul à
+partir du data frame de débits journaliers), il est possible de réaliser
+la manipulation en une fois à l'aide d'un group_by par mois et par
+station.
+
+Pour la suite du script, un fichier RData déjà constitué des débits
+moyens mensuels par station sera utilisé :
+
+```{r}
+load(file="raw_data/q_mensuels_ref.RData")
+```
+
+Pour calculer H, il est necessaire de calculer les débits moyens
+mensuels inter annuels correspondant aux 33 stations qui font office de
+débits normaux :
+
+```{r, eval=FALSE}
+
+#Exemple avec la station de l'Authie à Dompierre 
+
+qm_ia_E550 <- qm_E550 %>%
+  mutate(month = as.integer(substr(date_obs_elab, 6, 7))) %>% # création d'une colonne contenant uniquement  le mois
+  dplyr::group_by(month) %>%
+  dplyr::summarise(Qm_ia = mean(resultat_obs_elab)) # calcul des moyennes des débits mensuels regroupées par mois sur la période 1992-2022
+
+qm_E550 <- qm_E550 %>%
+  mutate(month = as.integer(substr(date_obs_elab, 6, 7))) # création d'une colonne mois
+
+qm_E550 <-
+  merge(qm_ia_E550, qm_E550, by = "month") # jointure des data frame de débits et de débits de référence par la modalité de mois
+
+```
+
+[Remarque]{.underline} : il peut être facile de réaliser l'opération en
+une fois à partir d'un data frame contenant les QmM pour toutes les
+stations, il faut juste trouver un moyen de faire la jointure entre df
+de QmM et QmM inter anuels en associant le bon QmM inter annuels à la
+bonne station et au bon mois
+
+Une fois le QmM inter annuel calculé, il suffit de l'utiliser pour
+diviser le QmM.
+
+```{r}
+
+# Exemple de calcul de H pour l'Authie à Dompierre
+
+H_E550<-qm_E550 %>% 
+  mutate(H=resultat_obs_elab/Qm_ia) %>% # creation d'une colonne H qui divise la colonne de débits mensuel par celle de débits de référence 
+  select(code_station, date_obs_elab, H) # selection des colonnes de code, date et hydraulicité
+
+```
+
+Pour la suite du script, un data frame déjà constitué des H des 33
+stations sera utilisé :
+
+```{r}
+load(file="processed_data/hydraulicity.RData")
+
+```
+
+Le graphique ci-dessus représente l'hydraulicité mensuelle médiane sur
+les 33 stations (31 pour 1992 et 1993) en fonction du temps. La droite
+y=1 correspond à la situation où le débit moyen mensuel est égal au
+débit moyen mensuel inter annuel. Lorsque la courbe de l'hydraulicité
+est au dessus de cette droite, les débits moyens mensuels sont plus
+élevés que lors d'une année que l'on peut considérer comme "normale". Au
+contraire, lorsque la courbe passe en dessous de la droite, les débits
+sont plus faibles que la normale.
+
+L'évolution de l'hydraulicité sur la période 1992-2022 mets en évidence
+les mêmes périodes de déficit en eau que la représentation de la durée
+de sécheresse.
+
+```{r}
+hydraulicity %>% 
+  dplyr::group_by(date_obs_elab) %>% # regroupement par date d'observation 
+dplyr::summarise(med_H=median(H)) %>%  # calcul d'une médiane par année 
+            ggplot(
+  aes(x = date_obs_elab, y = med_H) # abscisse et ordonnée 
+) +
+geom_line()+ # ligne 
+  theme(axis.text.x = element_text(angle = 90))+ # étiquette de l'axe x à la verticale 
+  geom_line(aes(x=date_obs_elab, y=1), col="red")+ # ajout d'une ligne horizontale rouge représentant la valeur H=1 
+  scale_x_date(date_breaks = "1 year") # pas de temps annuel sur l'axe x 
+```
+
+On constate, en observant uniquement les années à tendances de
+sécheresse, que les QmM est toujours inférieur à la normale :
+
+```{r}
+hydraulicity %>% 
+  filter(annee %in% c("2022", "2020", "2019", "2018","2017", "2011")) %>% # conserver uniquement les années à tendances sèches 
+   dplyr::group_by(month, annee) %>% # grouper par mois et année 
+dplyr::summarise(med_H=median(H)) %>%  # calculer une médiane par mois et année 
+  ggplot(aes(x=month, y=med_H, fill=annee))+ # abscisse et ordonnée avec un paramétrage de couleur selon l'année 
+  geom_col(position='dodge', stat="identity")+ # histogramme : plusieurs barres par valeur d'abscisse 
+  scale_fill_brewer(palette="Set1") # palette de couleur pour la coloration des années 
+```
+
+## 3) VCN10
+
+Le VCN10 annuel est le débit minimum moyen sur 10 jours consécutifs sur
+une année. Ils seront calculés à partir des débits spécifiques de chaque
+station (débits réels divisées par la surface du bassin versant amont),
+afin de pouvoir comparer ces VCN10 et les agréger à l'échelle régionale.
+
+Les surfaces de bassins versants amonts sont disponibles via l'API hydrometrie de Hub'eau pour chaque **site** (et non pour chaque station). 
+
+```{r, eval=FALSE}
+# Exemple de calcul des débits spécifique pour l'Authie à Dompierre 
+
+q_E550<-q_E550 %>% 
+  mutate(Q_spe=resultat_obs_elab/796)
+
+# pour réaliser l'opération pour d'autre stations,rempacer le nom du data frame et la valeur de la surface du bassin versant amont 
+```
+
+[Remarque]{.underline} : Encore une fois, il faudrait voir comment il
+est possible de ne pas rélacer les lignes de codes chaque fois.
+Peut-être tout simplement prendre le temps de faire un tableau des
+surfaces de BV amonts en fonction des stations (ou voir s'il existe
+quelque part) et faire ensuite une jointure avec un df des débits toutes
+les stations avant calcul.
+
+Le calcule du VCN10 se fait en utilisant la fonction mean_run qui permet
+de calculer une moyenne glissante (en l'occurence sur 10 jours). Le
+minimum annuel du résultat de cette moyenne glissante est ensuite
+calculé :
+
+```{r}
+# calcul des débits spécifiques pour chaque station du data frame q_jr_totaux_def 
+
+# importation des surface de bv amont pour chaque **station** 
+
+codes_sites_sta <-get_hydrometrie_stations(code_departement = "80") %>% 
+  filter(en_service == TRUE) %>% 
+  select(code_site, code_station)
+
+
+surface_bv <- get_hydrometrie_sites(code_departement = "80") %>% 
+  select(code_site, surface_bv) %>% 
+  right_join(y=codes_sites_sta, by= "code_site")
+
+#calcul des débits spécifiques + ordonner le data frame par ordre croissant des dates 
+
+q_jr_totaux_def <-q_jr_totaux_def %>% 
+  left_join(y=surface_bv, by="code_station") %>% 
+  mutate(resultat_obs_elab_spe=resultat_obs_elab/surface_bv) %>% 
+  arrange(date_obs_elab)
+```
+
+
+```{r}
+# calcul des VCN10 spécifiques annuels pour toutes les stations du data frame q_jr_totaux_def 
+
+VCN10 <- VCNx_sta_mult(q_jr_totaux_def, jours_glissant = 10) 
+
+VCN10 <- VCN10 %>% 
+  reduce(rbind)
+```
+
+```{r}
+
+# Exemple de calcul pour l'Authie à Dompierre 
+
+q_E550$date_obs_elab<-as.Date(q_E550$date_obs_elab) #conversion colonne date du data frame de débits journaliers en format date
+dates<-q_E550$date_obs_elab #création d'un vecteur de dates
+
+dates<-sort(dates, decreasing = FALSE) # tri des dates des plus anciennes aux plus récentes 
+
+VCN10_E550<-
+  mean_run(q_E550$Q_spe,   # calcul d'une moyenne glissante des débits spécifiques sur k=10 jours 
+                       k = 10, 
+                       idx = dates
+                       )
+
+VCN10_E550<-data.frame(VCN10_E550, dates, annee=substr(dates, 1,4)) # création d'un data frame avec les moyennes glissantes, les dates et les années 
+
+VCN10_E550<-VCN10_E550 %>% 
+  dplyr::group_by(annee) %>% 
+  dplyr::summarise(VCN10_annuel=min(VCN10_E550)) # calcule du minimum par années des moyennes glissantes -> VCN10 annuel 
+
+```
+
+
+L'observation des médianes des VCN10 annuels des 33 stations permet de confirmer les tendances de sécheresse identifiées par les autres indicateurs : 
+
+```{r}
+VCN10 %>% 
+  dplyr::group_by(annee) %>%  # grouper par année 
+  dplyr::summarise(med_VCN10=median(VCNx_annuel_spe)) %>% # calcul de la médiane par année 
+  mutate(annee = as.factor(annee)) %>% 
+   ggplot(aes(x=annee, y=med_VCN10))+ # abscisse et ordonnée 
+  geom_col()+ # histogramme 
+  theme(axis.text.x = element_text(angle = 90)) # étiquettes axe x à la verticale 
+```
+
